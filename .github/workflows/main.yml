@@ -25,7 +25,7 @@ jobs:
       - name: 按照清单安装依赖
         run: |
           pip install -r requirements.txt
-          pip install ccxt akshare
+          pip install ccxt akshare google-genai
 
       - name: 运行 Quantbot 并发送推送
         env: # 这里就是把保险箱里的密码拿出来给代码用
