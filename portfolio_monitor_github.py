@@ -47,20 +47,28 @@ CRYPTO_HOLDINGS = {
 # ==========================================
 def send_telegram_message(report_text):
     print("\n正在通过 Telegram 发送报告...")
-    encoded_text = urllib.parse.quote(report_text)
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={CHAT_ID}&text={encoded_text}&parse_mode=HTML"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    
+    # 顺手把 AI 喜欢生成的 Markdown 星号去掉，保持排版干净
+    clean_text = report_text.replace("**", "") 
+    
+    # 把文本打包成一个 JSON 包裹
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": clean_text,
+        "parse_mode": "HTML"
+    }
     
     try:
-        # 💥 核心改造 3：移除 session.proxies，云端服务器直接发给 Telegram
-        response = requests.get(url, timeout=10)
+        # 💥 核心修改：改用 POST 方法发送包裹，支持无限字数！
+        response = requests.post(url, json=payload, timeout=15)
         
         if response.status_code == 200:
             print("✅ Telegram 报告推送成功！手机应该响了。")
         else:
-            print(f"❌ 推送失败，错误代码: {response.status_code}")
+            print(f"❌ 推送失败，错误代码: {response.status_code}, {response.text}")
     except Exception as e:
          print(f"❌ 推送网络连接失败: {e}")
-
 # ------------------------------------------
 # 模块：海马体 (SQLite 数据库写入)
 # ------------------------------------------
@@ -154,7 +162,7 @@ def get_portfolio_status():
     # A1: 抓取 Crypto 与国际黄金
     try:
         # 💥 核心改造 6：移除 ccxt 的 proxies 配置
-        exchange = ccxt.binance()
+        exchange = ccxt.mexc()
         exchange.session.verify = False 
         macro_assets = [("BTC/USDT", "比特币 (BTC)"), ("ETH/USDT", "以太坊 (ETH)"), ("PAXG/USDT", "国际黄金 (盎司)")]
         for symbol, name in macro_assets:
