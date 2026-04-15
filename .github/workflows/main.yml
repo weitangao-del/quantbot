@@ -1,0 +1,35 @@
+name: 资产管家自动推送
+
+on:
+  workflow_dispatch: # 这个开关允许你在网页上手动点击运行！
+  schedule:
+    # GitHub 使用的是 UTC 时间，比日本时间慢 9 个小时。
+    # 下面这四个时间分别对应日本时间的 00:10, 06:10, 12:10, 18:10
+    - cron: '10 15 * * *'
+    - cron: '10 21 * * *'
+    - cron: '10 3 * * *'
+    - cron: '10 9 * * *'
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest # 白嫖一台微软的 Linux 云电脑
+    steps:
+      - name: 检出你的代码
+        uses: actions/checkout@v4
+
+      - name: 部署 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 按照清单安装依赖
+        run: |
+          pip install -r requirements.txt
+          pip install ccxt akshare
+
+      - name: 运行 Quantbot 并发送推送
+        env: # 这里就是把保险箱里的密码拿出来给代码用
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python portfolio_monitor.py
