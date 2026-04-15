@@ -32,4 +32,4 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python portfolio_monitor.py
+        run: python portfolio_monitor_github.py
