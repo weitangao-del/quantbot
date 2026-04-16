@@ -158,13 +158,11 @@ def get_portfolio_status():
             category_stats[cat_name] = {"value": 0.0, "profit": 0.0}
         category_stats[cat_name]["value"] += val
         category_stats[cat_name]["profit"] += prof
-
-    # A1: 抓取 Crypto 与国际黄金
+        # A1: 抓取核心 Crypto (走 MEXC 接口)
     try:
-        # 💥 核心改造 6：移除 ccxt 的 proxies 配置
         exchange = ccxt.mexc()
-        exchange.session.verify = False 
-        macro_assets = [("BTC/USDT", "比特币 (BTC)"), ("ETH/USDT", "以太坊 (ETH)"), ("PAXG/USDT", "国际黄金 (盎司)")]
+        # 💥 把找不到的 PAXG 从这里的列表里剔除，只留 BTC 和 ETH
+        macro_assets = [("BTC/USDT", "比特币 (BTC)"), ("ETH/USDT", "以太坊 (ETH)")]
         for symbol, name in macro_assets:
             ticker = exchange.fetch_ticker(symbol)
             price = ticker['last']
@@ -172,7 +170,19 @@ def get_portfolio_status():
             trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
             macro_results.append(f"🌍 {name}: ${price:,.2f} {trend} {change_pct:+.2f}%")
     except Exception as e:
-        macro_results.append(f"⚠️ 宏观(Crypto/Gold)获取失败: {e}")
+        macro_results.append(f"⚠️ 宏观(Crypto)获取失败: {e}")
+
+    # A1.5: 抓取国际黄金 (走 CoinGecko 聚合平台免费接口)
+    try:
+        cg_url = "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd&include_24hr_change=true"
+        cg_resp = requests.get(cg_url, timeout=10).json()
+        gold_price = cg_resp['pax-gold']['usd']
+        gold_change = cg_resp['pax-gold']['usd_24h_change']
+        trend = UP_SYM if gold_change > 0 else (DOWN_SYM if gold_change < 0 else FLAT_SYM)
+        macro_results.append(f"🌍 国际黄金 (盎司): ${gold_price:,.2f} {trend} {gold_change:+.2f}%")
+    except Exception as e:
+        macro_results.append(f"⚠️ 黄金获取失败: {e}")
+
 
     # A2: 抓取传统三大指数
     try:
