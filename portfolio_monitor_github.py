@@ -22,10 +22,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- A. 场内 ETF / LOF ---
 ETF_HOLDINGS = {
-    "501225": {"name": "全球芯片LOF", "shares": 900, "tag":"芯片LOf"},   
+    "501225": {"name": "全球芯片LOF", "shares": 1100, "tag":"芯片LOf"},   
     "588060": {"name": "科创50", "shares": 1500, "tag":"A股"},
-    "513330": {"name": "恒生科技", "shares": 6100, "tag":"港股"},
-    "513100": {"name": "纳指100 ETF", "shares": 1550, "tag":"美股"},      
+    "513330": {"name": "恒生科技", "shares": 7300, "tag":"港股"},
+    "159632": {"name": "纳指100 ETF", "shares": 2441, "tag":"美股"},      
     "518880": {"name": "黄金 ETF", "shares": 330, "tag":"黄金"}
 }
 
@@ -38,8 +38,8 @@ FUND_HOLDINGS = {
 
 # --- C. 加密货币 ---
 CRYPTO_HOLDINGS = {
-    "BTC/USDT": {"name": "比特币现货", "amount": 0.00433673},    
-    "ETH/USDT": {"name": "以太坊现货", "amount": 0.12250658},
+    "BTC/USDT": {"name": "比特币现货", "amount": 0.00531309},    
+    "ETH/USDT": {"name": "以太坊现货", "amount": 0.15354492},
 }
 
 # ==========================================
