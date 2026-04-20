@@ -184,6 +184,7 @@ def get_portfolio_status():
 
     try:
         csv_resp = requests.get(CSV_URL, timeout=15)
+        csv_resp.encoding = 'utf-8'
         reader = csv.DictReader(StringIO(csv_resp.text))
         exchange = ccxt.mexc()
         for row in reader:
