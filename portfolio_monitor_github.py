@@ -241,6 +241,7 @@ def get_portfolio_status():
                     results.append(f"[{cat}] {asset_name}: ¥{val_cny:,.2f} {trend} {change_pct:+.2f}%")
 
             except Exception as e:
+                results.append(f"❌ [{cat}] {asset_name}: 抓取失败，已跳过 ({source})")
                 print(f"⚠️ {asset_name} 抓取异常: {e}")
 
 
