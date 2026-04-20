@@ -198,47 +198,43 @@ def get_portfolio_status():
             val_cny = 0.0
             profit = 0.0
             change_pct = 0.0
-            
             try:
                 if source == 'FIXED': # 现金
                     val_cny = qty
                     profit = 0.0
+                    change_pct = 0.0
                 elif source == 'TENCENT': # 场内ETF/A股/港股
                     resp = session.get(f"http://qt.gtimg.cn/q={asset_id}", timeout=5)
+                    resp.encoding = 'gbk' # 兼容腾讯 GBK
                     if "v_" in resp.text:
                         parts = resp.text.split('~')
                         price = float(parts[3])
                         change_pct = float(parts[32])
                         val_cny = price * qty
                         profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                        elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): 
-                    # 🚀 抛弃沉重的 Akshare，改用腾讯轻量化基金实时接口
+                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): # 场外基金 (新版腾讯轻量接口)
                     clean_code = asset_id.replace('f', '')
-                    # 腾讯基金接口 jj + 代码
                     fund_url = f"http://qt.gtimg.cn/q=jj{clean_code}"
                     resp = session.get(fund_url, timeout=10)
-                    resp.encoding = 'gbk' # 腾讯使用 GBK 编码
+                    resp.encoding = 'gbk'
                     
                     if "v_jj" in resp.text:
-                        # 腾讯基金数据格式示例: v_jj017436="...~美股综合~1.1234~1.1100~2026-04-20~..."
                         parts = resp.text.split('~')
                         if len(parts) > 5:
-                            price = float(parts[3])      # 最新净值
-                            # 计算昨日涨跌幅 (最新净值 / 昨日净值 - 1)
+                            price = float(parts[3])      
                             yesterday_price = float(parts[4])
                             change_pct = ((price / yesterday_price) - 1) * 100 if yesterday_price != 0 else 0
-                            
                             val_cny = price * qty
                             profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                        else:
-                            # 如果实时接口没数据，降级回 Akshare 尝试（双保险）
-                            print(f"⚠️ 腾讯接口无数据，尝试降级抓取 {asset_id}...")
-                            fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
-                            price = fund_data['单位净值'].iloc[-1]
-                            val_cny = price * qty
+                    else:
+                        # 降级尝试
+                        fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
+                        price = fund_data['单位净值'].iloc[-1]
+                        val_cny = price * qty
+                        try:
                             change_pct = float(str(fund_data['日增长率'].iloc[-1]).replace('%', ''))
                             profit = val_cny - (val_cny / (1 + change_pct / 100))
-
+                        except: pass
                 elif source == 'CCXT_MEXC': # 加密货币
                     ticker = exchange.fetch_ticker(asset_id)
                     price = ticker['last']
@@ -246,23 +242,21 @@ def get_portfolio_status():
                     val_cny = price * qty * usd_to_cny 
                     profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
 
-                # --- 核心累加区 (严格与上方的 elif 对齐) ---
+                # --- 核心累加区 ---
                 if cat in category_stats:
                     category_stats[cat]["value"] += val_cny
                     category_stats[cat]["profit"] += profit
                 total_market_value += val_cny
                 total_daily_profit += profit
                 
-                # 记录明细 (跳过隐藏波动的现金)
-                if source != 'FIXED':
-                    trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
-                    results.append(f"[{cat}] {asset_name}: ¥{val_cny:,.2f} {trend} {change_pct:+.2f}%")
+                # 记录所有明细 (包含现金)
+                trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
+                results.append(f"[{cat}] {asset_name}: ¥{val_cny:,.2f} {trend} {change_pct:+.2f}%")
 
             except Exception as e:
-                results.append(f"❌ [{cat}] {asset_name}: 抓取失败，已跳过 ({source})")
                 print(f"⚠️ {asset_name} 抓取异常: {e}")
-
-
+                results.append(f"❌ [{cat}] {asset_name}: 抓取失败，已跳过 ({source})")
+          
     except Exception as e:
         print(f"❌ 云端表格读取失败: {e}")
         return
