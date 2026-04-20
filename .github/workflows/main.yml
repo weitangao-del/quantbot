@@ -1,35 +1,41 @@
-name: 资产管家自动推送
+name: Portfolio Monitor & Rebalance Engine
 
 on:
-  workflow_dispatch: # 这个开关允许你在网页上手动点击运行！
+  # 1. 允许你在 GitHub Actions 页面手动点击按钮随时触发
+  workflow_dispatch: 
+  
+  # 2. 定时触发器 (Cron)
   schedule:
-    # GitHub 使用的是 UTC 时间，比日本时间慢 9 个小时。
-    # 下面这四个时间分别对应日本时间的 00:10, 06:10, 12:10, 18:10
-    - cron: '10 15 * * *'
-    - cron: '10 21 * * *'
-    - cron: '10 3 * * *'
-    - cron: '10 9 * * *'
+    # ⚠️ 注意：GitHub Actions 使用的是 UTC 时间，比北京时间慢 8 小时！
+    # 设定为：每天北京时间 22:40 (即 UTC 时间 14:40) 运行一次。此时美股刚开盘不久，击球区雷达最精准。
+    # 这里的 40 代表错峰避开整点运行，防止排队拥堵。
+    - cron: '40 14 * * *'
 
 jobs:
-  run-bot:
-    runs-on: ubuntu-latest # 白嫖一台微软的 Linux 云电脑
+  run-monitor:
+    runs-on: ubuntu-latest # 绝对的云原生 Ubuntu 环境
+
     steps:
-      - name: 检出你的代码
-        uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-      - name: 部署 Python 环境
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: 按照清单安装依赖
-        run: |
-          pip install -r requirements.txt
-          pip install ccxt akshare google-genai
+    - name: Install Core Dependencies
+      # 💥 核心修改：确保 yfinance, ccxt, akshare 均被正确安装
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests ccxt akshare yfinance pandas
 
-      - name: 运行 Quantbot 并发送推送
-        env: # 这里就是把保险箱里的密码拿出来给代码用
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python portfolio_monitor_github.py
+    - name: Execute Strategy Engine
+      # 💥 核心修改：将 Google Sheets 的轻量级数据通道挂载到系统环境变量中
+      env:
+        MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        PORTFOLIO_CSV_URL: ${{ secrets.PORTFOLIO_CSV_URL }} # 必须在 GitHub Secrets 中配置此项
+      run: |
+        python portfolio_monitor_github.py
