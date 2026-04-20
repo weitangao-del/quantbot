@@ -133,11 +133,11 @@ def get_ai_summary(report_text, dev_text, alerts_text):
 
     payload = {
         "contents": [{"parts": [{"text": sys_prompt + "\n\n" + full_context}]}],
-        "generationConfig": {"maxOutputTokens": 2048}
+        "generationConfig": {"maxOutputTokens": 204800}
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=20)
+        response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
         ai_text = response.json()['candidates'][0]['content']['parts'][0]['text']
         return f"\n🤖 <b>芒格智囊点评:</b>\n{ai_text.strip()}\n"
@@ -211,16 +211,34 @@ def get_portfolio_status():
                         change_pct = float(parts[32])
                         val_cny = price * qty
                         profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): # 场外基金
+                        elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): 
+                    # 🚀 抛弃沉重的 Akshare，改用腾讯轻量化基金实时接口
                     clean_code = asset_id.replace('f', '')
-                    fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
-                    if not fund_data.empty:
-                        price = fund_data['单位净值'].iloc[-1]
-                        val_cny = price * qty
-                        try:
+                    # 腾讯基金接口 jj + 代码
+                    fund_url = f"http://qt.gtimg.cn/q=jj{clean_code}"
+                    resp = session.get(fund_url, timeout=10)
+                    resp.encoding = 'gbk' # 腾讯使用 GBK 编码
+                    
+                    if "v_jj" in resp.text:
+                        # 腾讯基金数据格式示例: v_jj017436="...~美股综合~1.1234~1.1100~2026-04-20~..."
+                        parts = resp.text.split('~')
+                        if len(parts) > 5:
+                            price = float(parts[3])      # 最新净值
+                            # 计算昨日涨跌幅 (最新净值 / 昨日净值 - 1)
+                            yesterday_price = float(parts[4])
+                            change_pct = ((price / yesterday_price) - 1) * 100 if yesterday_price != 0 else 0
+                            
+                            val_cny = price * qty
+                            profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
+                        else:
+                            # 如果实时接口没数据，降级回 Akshare 尝试（双保险）
+                            print(f"⚠️ 腾讯接口无数据，尝试降级抓取 {asset_id}...")
+                            fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
+                            price = fund_data['单位净值'].iloc[-1]
+                            val_cny = price * qty
                             change_pct = float(str(fund_data['日增长率'].iloc[-1]).replace('%', ''))
                             profit = val_cny - (val_cny / (1 + change_pct / 100))
-                        except: pass
+
                 elif source == 'CCXT_MEXC': # 加密货币
                     ticker = exchange.fetch_ticker(asset_id)
                     price = ticker['last']
