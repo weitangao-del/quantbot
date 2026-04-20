@@ -186,10 +186,9 @@ def get_portfolio_status():
         csv_resp = requests.get(CSV_URL, timeout=15)
         reader = csv.DictReader(StringIO(csv_resp.text))
         exchange = ccxt.mexc()
-
         for row in reader:
             asset_id = row['Asset_ID'].strip()
-            # 👈 新增：安全读取中文名称，如果表格里这格没填，就降级显示代码 ID 防止报错
+            # 兼容读取中文名称
             asset_name = row.get('Asset_Name', asset_id).strip() 
             qty = float(row['Quantity'].strip())
             cat = row['Category'].strip()
@@ -228,20 +227,21 @@ def get_portfolio_status():
                     val_cny = price * qty * usd_to_cny 
                     profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
 
-                # 累加与归类
-              if cat in category_stats:
+                # --- 核心累加区 (严格与上方的 elif 对齐) ---
+                if cat in category_stats:
                     category_stats[cat]["value"] += val_cny
                     category_stats[cat]["profit"] += profit
                 total_market_value += val_cny
                 total_daily_profit += profit
                 
-                # 👈 修改：在这里把 asset_id 换成 asset_name 拼接输出
+                # 记录明细 (跳过隐藏波动的现金)
                 if source != 'FIXED':
                     trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
                     results.append(f"[{cat}] {asset_name}: ¥{val_cny:,.2f} {trend} {change_pct:+.2f}%")
 
             except Exception as e:
                 print(f"⚠️ {asset_name} 抓取异常: {e}")
+
 
     except Exception as e:
         print(f"❌ 云端表格读取失败: {e}")
