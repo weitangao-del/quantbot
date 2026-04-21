@@ -166,9 +166,15 @@ def get_portfolio_status():
     # --- 1. 获取汇率与宏观数据 ---
     macro_results = []
     try:
-        usd_to_cny = float(requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5).json()['rates']['CNY'])
-    except:
-        usd_to_cny = 7.23 
+        # 🚀 抛弃 24 小时慢速 API，调用 yfinance 获取实时外汇报价 (精确到秒)
+        cny_data = yf.download("CNY=X", period="1d", progress=False)
+        if not cny_data.empty:
+            usd_to_cny = float(cny_data['Close'].iloc[-1])
+        else:
+            raise Exception("雅虎外汇未返回数据")
+    except Exception as e:
+        print(f"⚠️ 实时汇率通道受阻，启用系统兜底汇率 ({e})")
+        usd_to_cny = 6.83  # 兜底水位更新
 
     try:
         cg_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd&include_24hr_change=true", timeout=10).json()
