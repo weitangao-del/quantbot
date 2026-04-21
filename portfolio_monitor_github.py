@@ -212,20 +212,32 @@ def get_portfolio_status():
                         change_pct = float(parts[32])
                         val_cny = price * qty
                         profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): # 场外基金 (新版腾讯轻量接口)
+                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): 
+                    # 🚀 降维打击：调用天天基金移动端原生底层接口，无视反爬封锁！
                     clean_code = asset_id.replace('f', '')
-                    fund_url = f"http://qt.gtimg.cn/q=jj{clean_code}"
-                    resp = session.get(fund_url, timeout=10)
-                    resp.encoding = 'gbk'
+                    # 伪装成 iPhone 手机客户端
+                    headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_2 like Mac OS X)'}
+                    # 直连移动端 JSON 接口
+                    api_url = f"https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?pageIndex=1&pageSize=2&FCODE={clean_code}&deviceid=Wap"
                     
-                    if "v_jj" in resp.text:
-                        parts = resp.text.split('~')
-                        if len(parts) > 5:
-                            price = float(parts[3])      
-                            yesterday_price = float(parts[4])
-                            change_pct = ((price / yesterday_price) - 1) * 100 if yesterday_price != 0 else 0
-                            val_cny = price * qty
-                            profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
+                    resp = session.get(api_url, headers=headers, timeout=10)
+                    fund_json = resp.json()
+                    
+                    if not fund_json['Data'] or not fund_json['Data']['LSJZList']:
+                        raise Exception("天天基金接口未返回有效数据")
+                        
+                    # 直接提取最近一天的净值和涨跌幅
+                    latest_data = fund_json['Data']['LSJZList'][0]
+                    price = float(latest_data['DWJZ']) # 最新单位净值
+                    
+                    try:
+                        change_pct = float(latest_data['JZZZL']) # 最新日增长率
+                    except:
+                        change_pct = 0.0 # 遇到节假日无涨跌幅的兜底
+                        
+                    val_cny = price * qty
+                    profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0        
+
                     else:
                         # 降级尝试
                         fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
