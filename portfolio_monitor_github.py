@@ -199,10 +199,29 @@ def get_portfolio_status():
             profit = 0.0
             change_pct = 0.0
             try:
-                if source == 'FIXED': # 现金储备
+                if source == 'FIXED': # 现金
                     val_cny = qty
                     profit = 0.0
                     change_pct = 0.0
+                
+                # 🚀 核心修复 1：拦截器前置！只要是 f 开头，无论表格里写什么，强制进入基金通道！
+                elif asset_id.startswith('f') or source == 'AKSHARE_FUND': 
+                    # 🚀 核心修复 2：原汁原味还原你最初完美运行的那套 akshare 代码！
+                    clean_code = asset_id.replace('f', '')
+                    fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
+                    
+                    if not fund_data.empty:
+                        price = fund_data['单位净值'].iloc[-1]
+                        val_cny = price * qty
+                        try:
+                            change_pct = float(str(fund_data['日增长率'].iloc[-1]).replace('%', ''))
+                            profit = val_cny - (val_cny / (1 + change_pct / 100))
+                        except:
+                            change_pct = 0.0
+                            profit = 0.0
+                    else:
+                        raise Exception("Akshare 未返回数据")
+
                 elif source == 'TENCENT': # 场内ETF/A股/港股
                     resp = session.get(f"http://qt.gtimg.cn/q={asset_id}", timeout=5)
                     resp.encoding = 'gbk' # 兼容腾讯 GBK
@@ -212,33 +231,15 @@ def get_portfolio_status():
                         change_pct = float(parts[32])
                         val_cny = price * qty
                         profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): # 天天基金移动端底层直连
-                    clean_code = asset_id.replace('f', '')
-                    headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_2 like Mac OS X)'}
-                    api_url = f"https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?pageIndex=1&pageSize=2&FCODE={clean_code}&deviceid=Wap"
-                    resp = session.get(api_url, headers=headers, timeout=10)
-                    fund_json = resp.json()
-                    
-                    if not fund_json['Data'] or not fund_json['Data']['LSJZList']:
-                        raise Exception("天天基金接口未返回有效数据")
-                        
-                    latest_data = fund_json['Data']['LSJZList'][0]
-                    price = float(latest_data['DWJZ'])
-                    try:
-                        change_pct = float(latest_data['JZZZL'])
-                    except:
-                        change_pct = 0.0
-                        
-                    val_cny = price * qty
-                    profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                elif source == 'CCXT_MEXC': # 加密货币接口
+
+                elif source == 'CCXT_MEXC': # 加密货币
                     ticker = exchange.fetch_ticker(asset_id)
                     price = ticker['last']
                     change_pct = float(ticker.get('percentage', 0))
                     val_cny = price * qty * usd_to_cny 
                     profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
 
-                # --- 核心数据累加区 ---
+                # --- 核心累加区 ---
                 if cat in category_stats:
                     category_stats[cat]["value"] += val_cny
                     category_stats[cat]["profit"] += profit
@@ -252,6 +253,7 @@ def get_portfolio_status():
             except Exception as e:
                 print(f"⚠️ {asset_name} 抓取异常: {e}")
                 results.append(f"❌ [{cat}] {asset_name}: 抓取失败，已跳过 ({source})")
+            
             
           
     except Exception as e:
