@@ -199,7 +199,7 @@ def get_portfolio_status():
             profit = 0.0
             change_pct = 0.0
             try:
-                if source == 'FIXED': # 现金
+                if source == 'FIXED': # 现金储备
                     val_cny = qty
                     profit = 0.0
                     change_pct = 0.0
@@ -212,62 +212,47 @@ def get_portfolio_status():
                         change_pct = float(parts[32])
                         val_cny = price * qty
                         profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
-                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): 
-                    # 🚀 降维打击：调用天天基金移动端原生底层接口，无视反爬封锁！
+                elif source == 'AKSHARE_FUND' or asset_id.startswith('f'): # 天天基金移动端底层直连
                     clean_code = asset_id.replace('f', '')
-                    # 伪装成 iPhone 手机客户端
                     headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_2 like Mac OS X)'}
-                    # 直连移动端 JSON 接口
                     api_url = f"https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?pageIndex=1&pageSize=2&FCODE={clean_code}&deviceid=Wap"
-                    
                     resp = session.get(api_url, headers=headers, timeout=10)
                     fund_json = resp.json()
                     
                     if not fund_json['Data'] or not fund_json['Data']['LSJZList']:
                         raise Exception("天天基金接口未返回有效数据")
                         
-                    # 直接提取最近一天的净值和涨跌幅
                     latest_data = fund_json['Data']['LSJZList'][0]
-                    price = float(latest_data['DWJZ']) # 最新单位净值
-                    
+                    price = float(latest_data['DWJZ'])
                     try:
-                        change_pct = float(latest_data['JZZZL']) # 最新日增长率
+                        change_pct = float(latest_data['JZZZL'])
                     except:
-                        change_pct = 0.0 # 遇到节假日无涨跌幅的兜底
+                        change_pct = 0.0
                         
                     val_cny = price * qty
-                    profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0        
-
-                    else:
-                        # 降级尝试
-                        fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
-                        price = fund_data['单位净值'].iloc[-1]
-                        val_cny = price * qty
-                        try:
-                            change_pct = float(str(fund_data['日增长率'].iloc[-1]).replace('%', ''))
-                            profit = val_cny - (val_cny / (1 + change_pct / 100))
-                        except: pass
-                elif source == 'CCXT_MEXC': # 加密货币
+                    profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
+                elif source == 'CCXT_MEXC': # 加密货币接口
                     ticker = exchange.fetch_ticker(asset_id)
                     price = ticker['last']
                     change_pct = float(ticker.get('percentage', 0))
                     val_cny = price * qty * usd_to_cny 
                     profit = val_cny - (val_cny / (1 + change_pct / 100)) if change_pct != 0 else 0
 
-                # --- 核心累加区 ---
+                # --- 核心数据累加区 ---
                 if cat in category_stats:
                     category_stats[cat]["value"] += val_cny
                     category_stats[cat]["profit"] += profit
                 total_market_value += val_cny
                 total_daily_profit += profit
                 
-                # 记录所有明细 (包含现金)
+                # 记录明细 (包含现金)
                 trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
                 results.append(f"[{cat}] {asset_name}: ¥{val_cny:,.2f} {trend} {change_pct:+.2f}%")
 
             except Exception as e:
                 print(f"⚠️ {asset_name} 抓取异常: {e}")
                 results.append(f"❌ [{cat}] {asset_name}: 抓取失败，已跳过 ({source})")
+            
           
     except Exception as e:
         print(f"❌ 云端表格读取失败: {e}")
