@@ -1,41 +1,35 @@
 name: Portfolio Monitor & Rebalance Engine
 
 on:
-  # 1. 允许你在 GitHub Actions 页面手动点击按钮随时触发
   workflow_dispatch: 
-  
-  # 2. 定时触发器 (Cron)
   schedule:
-    # ⚠️ 注意：GitHub Actions 使用的是 UTC 时间，比北京时间慢 8 小时！
-    # 设定为：每天北京时间 22:40 (即 UTC 时间 14:40) 运行一次。此时美股刚开盘不久，击球区雷达最精准。
-    # 这里的 40 代表错峰避开整点运行，防止排队拥堵。
     - cron: '40 14 * * *'
 
 jobs:
   run-monitor:
-    runs-on: ubuntu-latest # 绝对的云原生 Ubuntu 环境
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      # 🚀 升级底层拉取插件至 v4 (适配最新 Node 环境)
+      uses: actions/checkout@v4
 
     - name: Set up Python 3.10
-      uses: actions/setup-python@v4
+      # 🚀 升级 Python 环境配置插件至 v5
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
     - name: Install Core Dependencies
-      # 💥 核心修改：确保 yfinance, ccxt, akshare 均被正确安装
       run: |
         python -m pip install --upgrade pip
         pip install requests ccxt akshare yfinance pandas
 
     - name: Execute Strategy Engine
-      # 💥 核心修改：将 Google Sheets 的轻量级数据通道挂载到系统环境变量中
       env:
         MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        PORTFOLIO_CSV_URL: ${{ secrets.PORTFOLIO_CSV_URL }} # 必须在 GitHub Secrets 中配置此项
+        PORTFOLIO_CSV_URL: ${{ secrets.PORTFOLIO_CSV_URL }}
       run: |
         python portfolio_monitor_github.py
