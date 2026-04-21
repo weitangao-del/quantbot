@@ -101,3 +101,54 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# --- 在 macro_yield_monitor.py 中新增以下逻辑 ---
+
+def get_fed_funds_futures():
+    """
+    通过 30天联邦基金利率期货 (ZQ=F) 逆推市场降息预期
+    """
+    # 抓取当前月和下月合约，以判断短期定价
+    ticker = "ZQ=F" 
+    price = fetch_yahoo_yield(ticker, "联邦基金利率期货")
+    
+    if price:
+        implied_rate = 100 - price
+        return implied_rate
+    return None
+
+def analyze_fed_sentiment(implied_rate):
+    """
+    基于隐含利率对比当前基准利率，输出市场下注倾向
+    假设当前基准利率区间上限为 5.50% (请根据 2026 实际情况调整)
+    """
+    CURRENT_UPPER_BOUND = 5.50  # 这个值你可以根据 2026 年实际基准利率动态调整
+    
+    spread = CURRENT_UPPER_BOUND - implied_rate
+    
+    if spread > 0.40:
+        return f"🔴 强烈降息预期：市场正在定价 50bps 的大幅降息 (隐含率: {implied_rate:.2f}%)"
+    elif spread > 0.15:
+        return f"🟡 稳健降息预期：市场正在定价 25bps 的常规降息 (隐含率: {implied_rate:.2f}%)"
+    elif abs(spread) <= 0.15:
+        return f"⚪ 维持现状：市场倾向于美联储本次按兵不动"
+    else:
+        return f"⚠️ 加息预警：市场居然在定价加息风险！(隐含率: {implied_rate:.2f}%)"
+
+# --- 修改 main 函数中的报告生成部分 ---
+def main():
+    # ... 原有的收益率抓取逻辑 ...
+    
+    fed_implied_rate = get_fed_funds_futures()
+    fed_sentiment = analyze_fed_sentiment(fed_implied_rate) if fed_implied_rate else "数据获取失败"
+
+    report = (
+        "🏦 **【全球宏观资产雷达 & 美联储观察】**\n"
+        "------------------------\n"
+        f"🇺🇸 10Y美债收益率: **{yield_10y:.2f}%**\n"
+        f"🛡️ 3M美债收益率: **{yield_3m:.2f}%**\n"
+        f"📈 **降息概率定价**: {fed_sentiment}\n\n"
+        f"📊 **曲线状态**: {inversion_alert}\n\n"
+        # ... 后续逻辑 ...
+    )
+    # ... 发送通知 ...
