@@ -20,11 +20,11 @@ CSV_URL = os.getenv("PORTFOLIO_CSV_URL") # 🚨 新增：Google Sheets CSV直连
 
 # 🎯 价值投资与永久组合的"锚点"
 TARGET_WEIGHTS = {
-    "US_TECH": 0.30,   # 美股/芯片/全球成长
-    "CN_HK": 0.15,     # A股/港股宽基
+    "US_TECH": 0.40,   # 美股/芯片/全球成长
+    "CN_HK": 0.10,     # A股/港股宽基
     "CRYPTO": 0.15,    # 加密货币高波资产
     "GOLD": 0.15,      # 黄金底仓
-    "CASH": 0.25       # 战略现金池
+    "CASH": 0.20       # 战略现金池
 }
 
 # 🎯 阶梯击球区阈值 (Max Drawdown %)
