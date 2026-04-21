@@ -5,17 +5,19 @@ on:
   schedule:
     - cron: '40 14 * * *'
 
+# 🚀 终极杀手锏：在全局环境变量中强制启用 Node.js 24，彻底封杀警告！
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
-      # 🚀 升级底层拉取插件至 v4 (适配最新 Node 环境)
       uses: actions/checkout@v4
 
     - name: Set up Python 3.10
-      # 🚀 升级 Python 环境配置插件至 v5
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
