@@ -26,11 +26,11 @@ TARGET_WEIGHTS = {
     "GOLD": 0.15,      # 黄金底仓
     "CASH": 0.20       # 战略现金池
 }
-
-# 🎯 阶梯击球区阈值 (Max Drawdown %)
+# 🎯 阶梯击球区与火力分配矩阵：[(回撤%, 动用现金池比例%)]
 STRIKING_ZONES = {
-    "US_TECH": [25, 18, 12, 8], # 从深到浅，优先匹配深跌
-    "CRYPTO": [40]
+    "US_TECH": [(35, 0.50), (25, 0.30), (15, 0.15)], 
+    "CN_HK": [(30, 0.20), (20, 0.10)],
+    "CRYPTO": [(70, 0.30), (50, 0.20), (30, 0.10)]
 }
 
 UP_SYM = "🟩" 
@@ -84,9 +84,11 @@ def save_daily_snapshot(total_value, daily_profit):
 # ==========================================
 # 3. 击球区追踪引擎 (Max Drawdown Radar)
 # ==========================================
-def check_macro_drawdown():
-    """抓取代表性基准的 1年期高点，测算回撤，触发阶梯警报"""
-    print("📡 正在扫描宏观击球区 (Max Drawdown)...")
+def check_macro_drawdown(current_cash_value):
+    """
+    抓取代表性基准的1年期高点，测算回撤，并生成带【具体资金额度】的阶梯警报
+    """
+    print("📡 正在扫描宏观击球区与测算火力分配...")
     alerts = []
     try:
         # 1. 测算纳指 (代表 US_TECH)
@@ -95,10 +97,13 @@ def check_macro_drawdown():
             high_1y = float(qqq['High'].max())
             current = float(qqq['Close'].iloc[-1])
             dd_pct = abs((current - high_1y) / high_1y * 100)
-            for zone in STRIKING_ZONES["US_TECH"]:
-                if dd_pct >= zone:
-                    alerts.append(f"🎯 <b>美股击球区</b>: 纳指回撤 {dd_pct:.1f}% (触及 {zone}% 防线，建议动用现金阶梯加仓)")
-                    break
+            
+            for zone_pct, cash_ratio in STRIKING_ZONES["US_TECH"]:
+                if dd_pct >= zone_pct:
+                    deploy_amount = current_cash_value * cash_ratio
+                    alerts.append(f"🎯 <b>美股击球区</b>: 纳指回撤 {dd_pct:.1f}% (触及 {zone_pct}% 防线)。\n"
+                                  f"   👉 战术指令: 动用现金池 {cash_ratio*100:.0f}% (约 ¥{deploy_amount:,.0f}) 加仓！")
+                    break # 只触发最深的那一层
 
         # 2. 测算比特币 (代表 CRYPTO)
         btc = yf.download("BTC-USD", period="1y", progress=False)
@@ -106,9 +111,14 @@ def check_macro_drawdown():
             high_1y = float(btc['High'].max())
             current = float(btc['Close'].iloc[-1])
             dd_pct = abs((current - high_1y) / high_1y * 100)
-            if dd_pct >= STRIKING_ZONES["CRYPTO"][0]:
-                alerts.append(f"🌋 <b>Crypto极限深蹲</b>: BTC回撤 {dd_pct:.1f}% (触及 40% 恐慌线，建议重锤出击)")
-                
+            
+            for zone_pct, cash_ratio in STRIKING_ZONES["CRYPTO"]:
+                if dd_pct >= zone_pct:
+                    deploy_amount = current_cash_value * cash_ratio
+                    alerts.append(f"🌋 <b>Crypto击球区</b>: BTC回撤 {dd_pct:.1f}% (触及 {zone_pct}% 防线)。\n"
+                                  f"   👉 战术指令: 动用现金池 {cash_ratio*100:.0f}% (约 ¥{deploy_amount:,.0f}) 抄底！")
+                    break
+
     except Exception as e:
         print(f"⚠️ 击球区雷达报错跳过: {e}")
         
@@ -271,8 +281,11 @@ def get_portfolio_status():
         dev_lines.append(f"▫️ {cat}: 实际 {actual_ratio*100:>4.1f}% | 目标 {target*100:>4.1f}% | 偏离 {diff*100:>+5.1f}% {status_icon}")
     dev_text = "\n".join(dev_lines)
 
-    # --- 4. 击球区狙击预警 ---
-    striking_alerts = check_macro_drawdown()
+    # --- 4. 击球区狙击预警 ---# 提取当前的真实现金余额
+    current_cash_value = category_stats.get("CASH", {}).get("value", 0.0)
+    
+    # --- 4. 击球区狙击预警 (带现金火力参数) ---
+    striking_alerts = check_macro_drawdown(current_cash_value)
     alerts_text = "\n".join(striking_alerts) if striking_alerts else "当前未触发击球区，保持现金底仓耐心等待。"
 
     # --- 5. 终极拼装与发送 ---
