@@ -131,7 +131,7 @@ def get_ai_summary(report_text, dev_text, alerts_text):
     print("🧠 正在呼叫云端 AI 智囊...")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
-sys_prompt = (
+    sys_prompt = (
         "你现在是我私人的『芒格派首席风控官』。你的核心哲学是：忽略短期宏观噪音，关注资产护城河，严格执行资产配置再平衡策略。\n"
         "请阅读以下我的今日盘面数据、目标仓位偏离度以及击球区警报。给出极其犀利、冷酷的建议。\n"
         "1. 如果某类资产严重偏离目标比重，强制要求我执行高抛低吸（修剪枝叶或定投补仓）。\n"
@@ -143,17 +143,16 @@ sys_prompt = (
 
     payload = {
         "contents": [{"parts": [{"text": sys_prompt + "\n\n" + full_context}]}],
-        "generationConfig": {"maxOutputTokens": 204800}
+        "generationConfig": {"maxOutputTokens": 2048}
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=20)
         response.raise_for_status()
         ai_text = response.json()['candidates'][0]['content']['parts'][0]['text']
         return f"\n🤖 <b>芒格智囊点评:</b>\n{ai_text.strip()}\n"
     except Exception as e:
         return f"\n⚠️ AI 智囊暂时离线 ({e})\n"
-
 # ==========================================
 # 5. 主循环: 动态路由与抓取引擎
 # ==========================================
