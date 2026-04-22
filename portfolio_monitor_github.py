@@ -81,6 +81,26 @@ def save_daily_snapshot(total_value, daily_profit):
     finally:
         conn.close()
 
+# 🚀 新增：同步历史到 Google Sheets
+def sync_to_cloud_history(total_value, daily_profit):
+    webhook_url = os.getenv("HISTORY_WEBAPP_URL")
+    if not webhook_url:
+        print("⚠️ 未配置 HISTORY_WEBAPP_URL，跳过云端同步。")
+        return
+
+    payload = {
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "total_value": round(total_value, 2),
+        "daily_profit": round(daily_profit, 2)
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if "Success" in response.text:
+            print("📈 历史数据已成功同步至 Google Sheets History 表。")
+    except Exception as e:
+        print(f"❌ 云端历史同步失败: {e}")
+
 # ==========================================
 # 3. 击球区追踪引擎 (Max Drawdown Radar)
 # ==========================================
@@ -325,6 +345,8 @@ def get_portfolio_status():
     
     print(final_report)
     send_telegram_message(final_report)
+    # 结尾同步历史记录到 Google Sheets
+    sync_to_cloud_history(total_market_value, total_daily_profit)
 
 if __name__ == "__main__":
     get_portfolio_status()
