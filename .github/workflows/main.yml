@@ -33,5 +33,6 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         PORTFOLIO_CSV_URL: ${{ secrets.PORTFOLIO_CSV_URL }}
+        HISTORY_WEBAPP_URL: ${{ secrets.HISTORY_WEBAPP_URL }}
       run: |
         python portfolio_monitor_github.py
