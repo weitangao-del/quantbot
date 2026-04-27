@@ -167,7 +167,7 @@ def get_ai_summary(report_text, dev_text, alerts_text):
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=45)
         response.raise_for_status()
         ai_text = response.json()['candidates'][0]['content']['parts'][0]['text']
         return f"\n🤖 <b>芒格智囊点评:</b>\n{ai_text.strip()}\n"
