@@ -1,139 +1,122 @@
 import os
-import time
 import requests
+import time
+import pandas as pd
 
-# Yahoo Finance 接口地址
-YAHOO_API_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+# --- 环境变量读取 ---
+FRED_API_KEY = os.getenv('FRED_API_KEY')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+MACRO_BOT_TOKEN = os.getenv('MACRO_BOT_TOKEN')
 
-# 伪装头，防止 Yahoo 拦截 GitHub Actions 的默认 Python-urllib 标头
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-}
-
-def fetch_yahoo_yield(ticker, name):
+def get_us_yields():
     """
-    抓取 Yahoo Finance 的收益率数据，带 3 次重试与 30 秒超时
+    模块1：获取美债收益率 (原有功能)
+    使用腾讯财经 API (qt.gtimg.cn)，GitHub 环境直连极速
     """
-    url = YAHOO_API_URL.format(ticker=ticker)
-    
-    for attempt in range(1, 4):
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=30)
-            response.raise_for_status()
-            
-            data = response.json()
-            current_yield = data['chart']['result'][0]['meta']['regularMarketPrice']
-            return current_yield
-            
-        except Exception as e:
-            print(f"⚠️ [{name}] 第 {attempt} 次抓取失败: {e}")
-            if attempt < 3:
-                time.sleep(5)
-            else:
-                return None
-
-# ================= 新增：美联储降息预期模块 =================
-def get_fed_funds_futures():
-    """
-    通过 30天联邦基金利率期货 (ZQ=F) 逆推市场降息预期
-    """
-    # 抓取当前月合约
-    price = fetch_yahoo_yield("ZQ=F", "联邦基金利率期货(ZQ=F)")
-    if price:
-        # 隐含利率 = 100 - 期货价格
-        implied_rate = 100 - price
-        return implied_rate
-    return None
-
-def analyze_fed_sentiment(implied_rate):
-    """
-    基于隐含利率对比当前基准利率，输出市场下注倾向
-    (注：当前 2026 年设定基准利率参考上限为 5.50%，可依实际宏观情况调整)
-    """
-    CURRENT_UPPER_BOUND = 5.50  
-    spread = CURRENT_UPPER_BOUND - implied_rate
-    
-    if spread > 0.40:
-        return f"🔴 强烈降息预期 (定价约 50bps 降幅) | 隐含利率: {implied_rate:.2f}%"
-    elif spread > 0.15:
-        return f"🟡 稳健降息预期 (定价约 25bps 降幅) | 隐含利率: {implied_rate:.2f}%"
-    elif abs(spread) <= 0.15:
-        return f"⚪ 维持现状 (按兵不动) | 隐含利率: {implied_rate:.2f}%"
-    else:
-        return f"⚠️ 加息预警 (市场定价紧缩) | 隐含利率: {implied_rate:.2f}%"
-# =========================================================
-
-def send_telegram_alert(message):
-    """
-    发送 Telegram 消息
-    """
-    bot_token = os.getenv("MACRO_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    
-    if not bot_token or not chat_id:
-        print("❌ 环境变量缺失，取消 Telegram 发送。")
-        return
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    yields = {}
+    # 10年期: US10Y, 2年期: US2Y
+    symbols = {'10Y': 'us10Y', '2Y': 'us2Y'}
     
     try:
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        print("✅ Telegram 宏观简报发送成功")
+        for label, sym in symbols.items():
+            url = f"https://qt.gtimg.cn/q={sym}"
+            # 3次重试逻辑
+            for _ in range(3):
+                resp = requests.get(url, timeout=30)
+                if resp.status_code == 200:
+                    # 腾讯财经返回格式: v_us10Y="200~...~4.251~...";
+                    parts = resp.text.split('~')
+                    if len(parts) > 3:
+                        yields[label] = float(parts[3])
+                        break
+            time.sleep(1)
     except Exception as e:
-        print(f"❌ Telegram 发送失败: {e}")
+        print(f"⚠️ 收益率抓取异常: {e}")
+    
+    return yields
+
+def get_us_bond_oas():
+    """
+    模块2：获取美债信用风险溢价 (新增 OAS 功能)
+    """
+    if not FRED_API_KEY:
+        return "⚠️ FRED_API_KEY 未配置"
+        
+    url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
+        "series_id": "BAMLH0A0HYM2",
+        "api_key": FRED_API_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    
+    for attempt in range(3):
+        try:
+            response = requests.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                obs = data['observations'][0]
+                val_str = obs['value']
+                if val_str == ".": continue # 处理 FRED 缺失值
+                
+                val = float(val_str)
+                status = "🔴 恐慌" if val > 6.0 else ("🟡 预警" if val > 4.5 else "🟢 平稳")
+                return {"val": val, "date": obs['date'], "status": status}
+        except Exception as e:
+            print(f"OAS 重试 ({attempt+1}/3): {e}")
+            time.sleep(5)
+            
+    return None
+
+def send_telegram_report(content):
+    """
+    模块3：通过 JSON Payload 发送长文本通知
+    """
+    url = f"https://api.telegram.org/bot{MACRO_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": content,
+        "parse_mode": "Markdown"
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=30)
+        return r.json()
+    except Exception as e:
+        print(f"❌ TG 发送失败: {e}")
 
 def main():
-    print("🚀 开始执行宏观无风险利率及美联储预期监控...")
+    print("🚀 启动 7x24 全自动化宏观监控...")
     
-    # 1. 抓取美债数据
-    yield_10y = fetch_yahoo_yield("^TNX", "10年期美债")
-    yield_3m = fetch_yahoo_yield("^IRX", "3个月期美债(T-Bill)")
-    
-    # 2. 抓取美联储期货数据 (新增)
-    fed_implied_rate = get_fed_funds_futures()
-    
-    if yield_10y is None or yield_3m is None:
-        print("❌ 核心数据抓取失败，终止本次宏观评估。")
-        return
+    # 1. 抓取收益率
+    yield_data = get_us_yields()
+    y10 = yield_data.get('10Y', 'N/A')
+    y2 = yield_data.get('2Y', 'N/A')
+    inv_val = round(y10 - y2, 4) if isinstance(y10, float) and isinstance(y2, float) else "N/A"
 
-    # 构建衰退预警逻辑
-    inversion_alert = ""
-    if yield_3m > yield_10y:
-        inversion_alert = f"🚨 深度倒挂 (3M: {yield_3m:.2f}% > 10Y: {yield_10y:.2f}%) - 衰退定价中"
+    # 2. 抓取 OAS
+    oas_data = get_us_bond_oas()
+    
+    # 3. 组装研报
+    report_header = "🏛 **美债宏观投研监控**\n" + "—" * 15 + "\n"
+    yield_section = f"📈 **国债收益率 (无风险利率):**\n- 10Y Yield: `{y10}%` \n- 2Y Yield: `{y2}%` \n- 倒挂利差: `{inv_val}%` \n\n"
+    
+    if oas_data:
+        oas_section = (f"危机监控 (OAS 利差):\n"
+                       f"- 当前值: `{oas_data['val']}%` \n"
+                       f"- 状态: {oas_data['status']} \n"
+                       f"- 更新日期: {oas_data['date']}\n")
     else:
-        inversion_alert = "✅ 正常 (未倒挂)"
+        oas_section = "⚠️ OAS 数据获取失败\n"
 
-    # 构建降息预期文本 (新增)
-    fed_sentiment = analyze_fed_sentiment(fed_implied_rate) if fed_implied_rate else "⚠️ 数据获取失败"
-
-    # 生成最终汇报文本 (整合新增数据)
-    report = (
-        "🏦 **【全球宏观资产雷达 & 美联储观察】**\n"
-        "------------------------\n"
-        f"🇺🇸 10年期美债收益率: **{yield_10y:.2f}%** (全球定价锚)\n"
-        f"🛡️ 3个月期美债收益率: **{yield_3m:.2f}%** (无风险避风港)\n"
-        f"🦅 **美联储近期预期**: {fed_sentiment}\n\n"
-        f"📊 **收益率曲线状态**: {inversion_alert}\n\n"
-        "💡 **架构师策略提示**:\n"
-    )
+    # 4. 这里的逻辑可以对接你的 Gemini 分析模块
+    # ai_analysis = call_gemini(report_header + yield_section + oas_section) 
     
-    # 动态策略点评
-    if yield_3m > 5.0 and fed_implied_rate and fed_implied_rate < 5.0:
-        report += "前端无风险收益极高，但期货市场正在抢跑降息。当前是锁定长期美债收益率的最后窗口，加密货币等风险资产将迎来流动性利好。"
-    elif yield_10y < 3.5:
-        report += "长端资金成本极低，流动性极其充裕。风险资产（BTC、纳斯达克）处于黄金做多窗口期。"
-    else:
-        report += "宏观利率处于中性震荡区，请结合 USD/CNY 汇率表现决定是否进行资产置换。"
-
-    print("--- 报表生成完毕 ---")
-    print(report)
-    send_telegram_alert(report)
+    final_report = report_header + yield_section + oas_section
+    
+    # 5. 推送
+    send_telegram_report(final_report)
+    print("✅ 任务完成，报告已推送。")
 
 if __name__ == "__main__":
     main()
