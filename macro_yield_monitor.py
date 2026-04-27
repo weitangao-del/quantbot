@@ -51,11 +51,12 @@ def get_us_bond_oas():
                 val = float(val_str)
                 status = "🔴 恐慌" if val > 6.0 else ("🟡 预警" if val > 4.5 else "🟢 平稳")
                 return {"val": val, "date": obs['date'], "status": status}
-        except Exception as e:
-            print(f"OAS 重试 ({attempt+1}/3): {e}")
-            time.sleep(5)
+        # --- 找到函数最后两行，按此修改 ---
+    except Exception as e:
+        print(f"代码逻辑异常: {e}")
+        # 删掉 break
             
-    return None
+    return None  # 抓取失败统一返回 None，不要返回报错字符串
 
 def send_telegram_report(content):
     """
@@ -83,19 +84,17 @@ def main():
     inv_val = round(y10 - y2, 4) if isinstance(y10, float) and isinstance(y2, float) else "N/A"
 
     # 2. 抓取 OAS
+# --- 找到 main 里的 oas_section 组装部分 ---
     oas_data = get_us_bond_oas()
     
-    # 3. 组装研报
-    report_header = "🏛 **美债宏观投研监控**\n" + "—" * 15 + "\n"
-    yield_section = f"📈 **国债收益率 (无风险利率):**\n- 10Y Yield: `{y10}%` \n- 2Y Yield: `{y2}%` \n- 倒挂利差: `{inv_val}%` \n\n"
-    
-    if oas_data:
+    if isinstance(oas_data, dict): # 严格检查是否为字典
         oas_section = (f"危机监控 (OAS 利差):\n"
                        f"- 当前值: `{oas_data['val']}%` \n"
                        f"- 状态: {oas_data['status']} \n"
                        f"- 更新日期: {oas_data['date']}\n")
     else:
-        oas_section = "⚠️ OAS 数据获取失败\n"
+        # 如果 oas_data 是 None 或者字符串，走这个保底逻辑
+        oas_section = "⚠️ OAS 监控数据暂时无法获取 (FRED API 延迟或配置错误)\n"
 
     # 4. 这里的逻辑可以对接你的 Gemini 分析模块
     # ai_analysis = call_gemini(report_header + yield_section + oas_section) 
