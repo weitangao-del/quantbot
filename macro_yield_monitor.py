@@ -1,38 +1,26 @@
 import os
 import requests
 import time
-import pandas as pd
 
-# --- 环境变量读取 ---
+# --- 环境变量 ---
 FRED_API_KEY = os.getenv('FRED_API_KEY')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 MACRO_BOT_TOKEN = os.getenv('MACRO_BOT_TOKEN')
 
 def get_us_yields():
-    """
-    模块1：获取美债收益率 (原有功能)
-    使用腾讯财经 API (qt.gtimg.cn)，GitHub 环境直连极速
-    """
+    """纯原生实现，不依赖 pandas"""
     yields = {}
-    # 10年期: US10Y, 2年期: US2Y
     symbols = {'10Y': 'us10Y', '2Y': 'us2Y'}
-    
     try:
         for label, sym in symbols.items():
             url = f"https://qt.gtimg.cn/q={sym}"
-            # 3次重试逻辑
-            for _ in range(3):
-                resp = requests.get(url, timeout=30)
-                if resp.status_code == 200:
-                    # 腾讯财经返回格式: v_us10Y="200~...~4.251~...";
-                    parts = resp.text.split('~')
-                    if len(parts) > 3:
-                        yields[label] = float(parts[3])
-                        break
-            time.sleep(1)
+            resp = requests.get(url, timeout=30)
+            if resp.status_code == 200:
+                parts = resp.text.split('~')
+                if len(parts) > 3:
+                    yields[label] = float(parts[3])
     except Exception as e:
-        print(f"⚠️ 收益率抓取异常: {e}")
-    
+        print(f"收益率获取失败: {e}")
     return yields
 
 def get_us_bond_oas():
