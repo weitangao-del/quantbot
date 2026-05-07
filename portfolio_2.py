@@ -156,7 +156,7 @@ def get_ai_summary(report_text, dev_text, alerts_text):
     full_context = f"【今日盘面】\n{report_text}\n\n【再平衡诊断】\n{dev_text}\n\n【警报】\n{alerts_text}"
     payload = {
         "contents": [{"parts": [{"text": sys_prompt + "\n\n" + full_context}]}],
-        "generationConfig": {"maxOutputTokens": 2048}
+        "generationConfig": {"maxOutputTokens": 200000}
     }
     
     try:
