@@ -151,6 +151,7 @@ def get_ai_summary(report_text, dev_text, alerts_text):
         "1. 如果某类资产严重偏离目标比重，强制要求我执行高抛低吸。\n"
         "2. 🚨 如果击球区警报响起，严格按照系统计算的『金额』敦促我执行，不准自己瞎编。\n"
         "3. 对今日盈亏一句话冷血点评（盈亏同源，无需安慰）。\n"
+        "4. 依据现有持仓和全球宏观流动性与热点，作出点评。"
     )
     
     full_context = f"【今日盘面】\n{report_text}\n\n【再平衡诊断】\n{dev_text}\n\n【警报】\n{alerts_text}"
@@ -198,20 +199,29 @@ def get_portfolio_status():
     macro_results.append(f"💱 汇率中枢 | USD: {rates['USD']:.4f} {usd_trend} {rate_changes['USD']:+.2f}% | HKD: {rates['HKD']:.4f} {hkd_trend} {rate_changes['HKD']:+.2f}%")
     
     # 获取其他宏观资产
+    # 获取其他宏观资产
     try:
-        cg_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd&include_24hr_change=true", timeout=10).json()
+        # 🚀 升级 1：通过 CoinGecko 接口一次性双杀黄金和比特币，降低网络延迟
+        cg_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold,bitcoin&vs_currencies=usd&include_24hr_change=true", timeout=10).json()
+        
         gold_change = cg_resp['pax-gold']['usd_24h_change']
         macro_results.append(f"🌍 国际黄金: ${cg_resp['pax-gold']['usd']:,.2f} {UP_SYM if gold_change>0 else DOWN_SYM} {gold_change:+.2f}%")
         
+        btc_change = cg_resp['bitcoin']['usd_24h_change']
+        macro_results.append(f"🌋 比特币 (BTC): ${cg_resp['bitcoin']['usd']:,.2f} {UP_SYM if btc_change>0 else DOWN_SYM} {btc_change:+.2f}%")
+        
         session = requests.Session()
         session.trust_env = False 
-        for code, name in [("us.IXIC", "纳斯达克"), ("hkHSI", "恒生指数")]: # 更新宏观看板
+        
+        # 🚀 升级 2：在腾讯 API 轮询列表中无缝插入上证指数 (sh000001)
+        for code, name in [("us.IXIC", "纳斯达克"), ("hkHSI", "恒生指数"), ("sh000001", "上证指数")]: 
             resp = session.get(f"http://qt.gtimg.cn/q={code}", timeout=5)
             if "v_" in resp.text:
                 parts = resp.text.split('~')
                 macro_results.append(f"🏛️ {name}: {float(parts[3]):,.2f} {UP_SYM if float(parts[32])>0 else DOWN_SYM} {float(parts[32]):+.2f}%")
     except Exception as e:
         macro_results.append(f"⚠️ 宏观获取失败: {e}")
+
 
     # --- 2. 拉取云端表格并路由计算 ---
     total_market_value = 0.0
