@@ -275,6 +275,8 @@ def get_portfolio_status():
                     profit_local = val_local - (val_local / (1 + change_pct / 100)) if change_pct != 0 else 0
                     currency = 'USD' # 强制覆写为美元结算
 
+                
+
                 # --- 核心折算引擎 (多币种统一归拢人民币) ---
                 conv_rate = rates.get(currency, 1.0)
                 val_cny = val_local * conv_rate
@@ -284,7 +286,9 @@ def get_portfolio_status():
                     category_stats[cat]["value"] += val_cny
                     category_stats[cat]["profit"] += profit_cny
                 total_market_value += val_cny
-                total_daily_profit += total_daily_profit
+                total_daily_profit += profit_cny
+
+                
                 
                 trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
                 # 播报格式: 显示本币面额 + 折合人民币面额
