@@ -3,6 +3,7 @@ import os
 import csv
 from io import StringIO
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 import ccxt
@@ -17,6 +18,7 @@ TELEGRAM_TOKEN = os.getenv("MACRO_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CSV_URL = os.getenv("PORTFOLIO_CSV_URL")
+REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Shanghai")
 
 # 顶层资产桶：不要再按市场分，而是按这笔资产在组合里的职责分。
 PORTFOLIO_BUCKETS = {
@@ -87,6 +89,18 @@ DOWN_SYM = "🟥"
 FLAT_SYM = "⬜️"
 
 
+def local_now():
+    return datetime.now(ZoneInfo(REPORT_TIMEZONE))
+
+
+def get_report_session(now):
+    if 5 <= now.hour < 12:
+        return "早盘市场汇报"
+    if 12 <= now.hour < 19:
+        return "晚盘市场汇报"
+    return "盘中市场汇报"
+
+
 # ==========================================
 # 2. 核心工具与通信模块
 # ==========================================
@@ -151,7 +165,7 @@ def save_daily_snapshot(total_value, daily_profit):
         )
     """
     )
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = local_now().strftime("%Y-%m-%d")
     try:
         cursor.execute(
             """
@@ -174,7 +188,7 @@ def sync_to_cloud_history(total_value, daily_profit):
         return
 
     payload = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "date": local_now().strftime("%Y-%m-%d"),
         "total_value": round(total_value, 2),
         "daily_profit": round(daily_profit, 2),
     }
@@ -269,7 +283,9 @@ def get_ai_summary(report_text, dev_text, alerts_text):
 # 5. 主循环：动态路由与抓取引擎
 # ==========================================
 def get_portfolio_status():
-    print(f"🚀 启动跨市场全天候监控引擎 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...\n")
+    report_time = local_now()
+    report_session = get_report_session(report_time)
+    print(f"🚀 启动跨市场全天候监控引擎 ({report_time.strftime('%Y-%m-%d %H:%M:%S')})...\n")
 
     if not CSV_URL:
         print("❌ 致命错误: 未配置 PORTFOLIO_CSV_URL。程序终止。")
@@ -460,8 +476,8 @@ def get_portfolio_status():
     total_trend = UP_SYM if total_daily_profit > 0 else (DOWN_SYM if total_daily_profit < 0 else FLAT_SYM)
 
     report_lines = [
-        "🏆 <b>私人资管引擎 (职责桶配置版)</b>",
-        f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')} | 运行于 GitHub Actions",
+        f"🏆 <b>私人资管引擎 | {report_session}</b>",
+        f"🕒 {report_time.strftime('%Y-%m-%d %H:%M')} {REPORT_TIMEZONE} | 运行于 GitHub Actions",
         "========================================",
     ]
     report_lines.append("🌐 <b>全球宏观风向标</b>")
