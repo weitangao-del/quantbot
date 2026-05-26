@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import csv
+import json
 from io import StringIO
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -181,22 +182,70 @@ def save_daily_snapshot(total_value, daily_profit):
         conn.close()
 
 
-def sync_to_cloud_history(total_value, daily_profit):
+def build_bucket_snapshot(category_stats, total_market_value):
+    bucket_snapshot = {}
+    for bucket, cfg in PORTFOLIO_BUCKETS.items():
+        value = category_stats[bucket]["value"]
+        profit = category_stats[bucket]["profit"]
+        weight = value / total_market_value if total_market_value > 0 else 0.0
+        diff = weight - cfg["target"]
+        bucket_snapshot[bucket] = {
+            "label": cfg["label"],
+            "value": round(value, 2),
+            "profit": round(profit, 2),
+            "weight": round(weight, 6),
+            "target": cfg["target"],
+            "diff": round(diff, 6),
+            "status": "OK" if abs(diff) <= cfg["tolerance"] else ("OVERWEIGHT" if diff > 0 else "UNDERWEIGHT"),
+        }
+    return bucket_snapshot
+
+
+def sync_to_cloud_history(
+    total_value,
+    daily_profit,
+    total_change_pct,
+    category_stats,
+    asset_snapshots,
+    striking_alerts,
+    report_session,
+    rates,
+):
     webhook_url = os.getenv("HISTORY_WEBAPP_URL")
     if not webhook_url:
         print("⚠️ 未配置 HISTORY_WEBAPP_URL，跳过云端同步。")
         return
 
+    bucket_snapshot = build_bucket_snapshot(category_stats, total_value)
     payload = {
         "date": local_now().strftime("%Y-%m-%d"),
+        "timestamp": local_now().isoformat(timespec="seconds"),
+        "session": report_session,
         "total_value": round(total_value, 2),
         "daily_profit": round(daily_profit, 2),
+        "daily_change_pct": round(total_change_pct, 4),
+        "bucket_snapshot": bucket_snapshot,
+        "asset_snapshots": asset_snapshots,
+        "striking_alerts": striking_alerts,
+        "rates": {key: round(value, 6) for key, value in rates.items()},
     }
+
+    for bucket, snapshot in bucket_snapshot.items():
+        prefix = bucket.lower()
+        payload[f"{prefix}_value"] = snapshot["value"]
+        payload[f"{prefix}_profit"] = snapshot["profit"]
+        payload[f"{prefix}_weight"] = snapshot["weight"]
+        payload[f"{prefix}_diff"] = snapshot["diff"]
+        payload[f"{prefix}_status"] = snapshot["status"]
+
+    payload["bucket_snapshot_json"] = json.dumps(bucket_snapshot, ensure_ascii=False)
+    payload["asset_snapshots_json"] = json.dumps(asset_snapshots, ensure_ascii=False)
+    payload["striking_alerts_json"] = json.dumps(striking_alerts, ensure_ascii=False)
 
     try:
         response = requests.post(webhook_url, json=payload, timeout=15)
         if "Success" in response.text:
-            print("📈 历史数据已成功同步至 Google Sheets History 表。")
+            print("📈 仓位、盈亏与资产快照已成功同步至 Google Sheets History 表。")
         else:
             print(f"⚠️ 云端历史同步返回异常: {response.text[:200]}")
     except Exception as e:
@@ -354,6 +403,7 @@ def get_portfolio_status():
     total_daily_profit = 0.0
     category_stats = {k: {"value": 0.0, "profit": 0.0} for k in PORTFOLIO_BUCKETS.keys()}
     results = []
+    asset_snapshots = []
 
     try:
         csv_resp = requests.get(CSV_URL, timeout=15)
@@ -422,6 +472,21 @@ def get_portfolio_status():
 
                 trend = UP_SYM if change_pct > 0 else (DOWN_SYM if change_pct < 0 else FLAT_SYM)
                 bucket_label = PORTFOLIO_BUCKETS[cat]["label"]
+                asset_snapshots.append(
+                    {
+                        "asset_id": asset_id,
+                        "asset_name": asset_name,
+                        "bucket": cat,
+                        "bucket_label": bucket_label,
+                        "source": source,
+                        "currency": currency,
+                        "quantity": qty,
+                        "local_value": round(val_local, 2),
+                        "cny_value": round(val_cny, 2),
+                        "daily_profit": round(profit_cny, 2),
+                        "daily_change_pct": round(change_pct, 4),
+                    }
+                )
                 if currency != "CNY":
                     results.append(
                         f"[{bucket_label}] {asset_name}: {currency} {val_local:,.2f} "
@@ -506,7 +571,16 @@ def get_portfolio_status():
 
     print(final_report)
     send_telegram_message(final_report)
-    sync_to_cloud_history(total_market_value, total_daily_profit)
+    sync_to_cloud_history(
+        total_market_value,
+        total_daily_profit,
+        total_change_pct,
+        category_stats,
+        asset_snapshots,
+        striking_alerts,
+        report_session,
+        rates,
+    )
 
 
 if __name__ == "__main__":
