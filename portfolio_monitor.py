@@ -216,10 +216,13 @@ def sync_to_cloud_history(
         print("⚠️ 未配置 HISTORY_WEBAPP_URL，跳过云端同步。")
         return
 
+    now = local_now()
     bucket_snapshot = build_bucket_snapshot(category_stats, total_value)
     payload = {
-        "date": local_now().strftime("%Y-%m-%d"),
-        "timestamp": local_now().isoformat(timespec="seconds"),
+        "date": now.strftime("%Y-%m-%d"),
+        "timestamp": now.isoformat(timespec="seconds"),
+        "run_id": now.strftime("%Y%m%d-%H%M%S"),
+        "append_mode": "portfolio_snapshot_v2",
         "session": report_session,
         "total_value": round(total_value, 2),
         "daily_profit": round(daily_profit, 2),
@@ -244,6 +247,8 @@ def sync_to_cloud_history(
 
     try:
         response = requests.post(webhook_url, json=payload, timeout=15)
+        response_preview = response.text[:500]
+        print(f"📨 Google Sheets Web App 返回: HTTP {response.status_code} | {response_preview}")
         if "Success" in response.text:
             print("📈 仓位、盈亏与资产快照已成功同步至 Google Sheets History 表。")
         else:
