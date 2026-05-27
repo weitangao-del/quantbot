@@ -1,6 +1,6 @@
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById("1Dfrxjr5spKcaxAsxOoh9R_p5hzn8y5I-d86AdEgH9GE");
 
   appendDynamicRow_(ss, "History", {
     run_id: payload.run_id,
@@ -65,6 +65,33 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function doGet(e) {
+  const ss = SpreadsheetApp.openById("1Dfrxjr5spKcaxAsxOoh9R_p5hzn8y5I-d86AdEgH9GE");
+  const limit = Number(e.parameter.limit || 120);
+  const history = readSheetObjects_(ss, "History").slice(-limit);
+  const latestRunId = history.length ? history[history.length - 1].run_id : "";
+  const assets = readSheetObjects_(ss, "AssetSnapshots").filter((row) => row.run_id === latestRunId);
+  const payload = {
+    status: "Success",
+    generated_at: new Date().toISOString(),
+    latest_run_id: latestRunId,
+    history,
+    assets,
+  };
+  const json = JSON.stringify(payload);
+  const callback = e.parameter.callback;
+
+  if (callback) {
+    return ContentService
+      .createTextOutput(`${callback}(${json});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  return ContentService
+    .createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function appendDynamicRow_(ss, sheetName, rowObject) {
   const sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
   const keys = Object.keys(rowObject);
@@ -84,4 +111,21 @@ function appendDynamicRow_(ss, sheetName, rowObject) {
 
   const row = headers.map((header) => rowObject[header] ?? "");
   sheet.appendRow(row);
+}
+
+function readSheetObjects_(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return [];
+  }
+
+  const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+  const headers = values[0].map(String);
+  return values.slice(1).map((row) => {
+    const object = {};
+    headers.forEach((header, index) => {
+      object[header] = row[index];
+    });
+    return object;
+  });
 }
