@@ -3,9 +3,10 @@ name: Portfolio Monitor
 on:
   workflow_dispatch:
   schedule:
-    # Beijing time 09:07 and 17:07. GitHub Actions cron uses UTC.
-    # Avoid minute 0 because GitHub can delay or drop jobs at the top of the hour.
-    - cron: "7 1,9 * * *"
+    # Beijing time 09:07/09:17/09:27 and 17:07/17:17/17:27.
+    # Redundant attempts are intentional; the program skips duplicates after
+    # the first successful official record.
+    - cron: "7,17,27 1,9 * * *"
 
 jobs:
   run-monitor:
