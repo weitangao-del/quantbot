@@ -108,7 +108,7 @@ def is_official_report_run(now):
         return True
     if forced in {"0", "false", "no"}:
         return False
-    return os.getenv("GITHUB_EVENT_NAME") == "schedule" and now.hour in {9, 17}
+    return os.getenv("GITHUB_EVENT_NAME") == "schedule"
 
 
 # ==========================================
