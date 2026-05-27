@@ -7,6 +7,8 @@ function doPost(e) {
     timestamp: payload.timestamp,
     date: payload.date,
     session: payload.session,
+    record_type: payload.record_type,
+    is_official_report: payload.is_official_report,
     total_value: payload.total_value,
     daily_profit: payload.daily_profit,
     daily_change_pct: payload.daily_change_pct,
@@ -41,6 +43,8 @@ function doPost(e) {
       timestamp: payload.timestamp,
       date: payload.date,
       session: payload.session,
+      record_type: payload.record_type,
+      is_official_report: payload.is_official_report,
       asset_id: asset.asset_id,
       asset_name: asset.asset_name,
       bucket: asset.bucket,
@@ -68,12 +72,18 @@ function doPost(e) {
 function doGet(e) {
   const ss = SpreadsheetApp.openById("1Dfrxjr5spKcaxAsxOoh9R_p5hzn8y5I-d86AdEgH9GE");
   const limit = Number(e.parameter.limit || 120);
-  const history = readSheetObjects_(ss, "History").slice(-limit);
+  const view = e.parameter.view || "official";
+  const allHistory = readSheetObjects_(ss, "History");
+  const filteredHistory = view === "all" ? allHistory : allHistory.filter(isOfficialHistoryRow_);
+  const history = filteredHistory.slice(-limit);
   const latestRunId = history.length ? history[history.length - 1].run_id : "";
   const assets = readSheetObjects_(ss, "AssetSnapshots").filter((row) => row.run_id === latestRunId);
   const payload = {
     status: "Success",
     generated_at: new Date().toISOString(),
+    view,
+    total_history_rows: allHistory.length,
+    visible_history_rows: history.length,
     latest_run_id: latestRunId,
     history,
     assets,
@@ -90,6 +100,19 @@ function doGet(e) {
   return ContentService
     .createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function isOfficialHistoryRow_(row) {
+  if (row.is_official_report === true || row.is_official_report === "TRUE" || row.is_official_report === "true") {
+    return true;
+  }
+  if (row.record_type === "official") {
+    return true;
+  }
+  if (row.is_official_report !== "" && row.is_official_report !== undefined && row.is_official_report !== null) {
+    return false;
+  }
+  return row.session === "早盘市场汇报" || row.session === "晚盘市场汇报";
 }
 
 function appendDynamicRow_(ss, sheetName, rowObject) {
