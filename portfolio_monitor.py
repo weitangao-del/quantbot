@@ -159,10 +159,43 @@ def scheduled_record_already_exists(report_time, run_slot, is_official_report):
         if row.get("schedule_slot") == run_slot:
             print(f"ℹ️ {report_date} {run_slot} 已有记录，本次备用触发跳过。")
             return True
+        if legacy_row_matches_slot(row, run_slot):
+            print(f"ℹ️ {report_date} {run_slot} 已有旧格式记录，本次备用触发跳过。")
+            return True
         if is_official_report and is_truthy(row.get("is_official_report")):
             print(f"ℹ️ {report_date} 已有正式记录，本次备用触发跳过。")
             return True
     return False
+
+
+def legacy_row_matches_slot(row, run_slot):
+    expected_hours = {
+        "official_0900": 9,
+        "ad_hoc_1500": 15,
+        "ad_hoc_2100": 21,
+        "ad_hoc_0300": 3,
+    }
+    expected_hour = expected_hours.get(run_slot)
+    if expected_hour is None:
+        return False
+    return extract_row_hour(row) == expected_hour
+
+
+def extract_row_hour(row):
+    timestamp = row.get("timestamp") or row.get("Timestamp")
+    if timestamp:
+        try:
+            parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            return parsed.astimezone(ZoneInfo(REPORT_TIMEZONE)).hour
+        except ValueError:
+            pass
+
+    run_id = str(row.get("run_id") or row.get("Run_ID") or "")
+    if "-" in run_id:
+        hour_text = run_id.split("-", 1)[1][:2]
+        if hour_text.isdigit():
+            return int(hour_text)
+    return None
 
 
 def is_truthy(value):
@@ -301,20 +334,20 @@ def sync_to_cloud_history(
     striking_alerts,
     report_session,
     rates,
+    report_time,
+    run_slot,
+    is_official_report,
 ):
     webhook_url = os.getenv("HISTORY_WEBAPP_URL")
     if not webhook_url:
         print("⚠️ 未配置 HISTORY_WEBAPP_URL，跳过云端同步。")
-        return
+        return False
 
-    now = local_now()
-    run_slot = get_schedule_slot(now)
     bucket_snapshot = build_bucket_snapshot(category_stats, total_value)
-    is_official_report = is_official_report_run(now)
     payload = {
-        "date": now.strftime("%Y-%m-%d"),
-        "timestamp": now.isoformat(timespec="seconds"),
-        "run_id": now.strftime("%Y%m%d-%H%M%S"),
+        "date": report_time.strftime("%Y-%m-%d"),
+        "timestamp": report_time.isoformat(timespec="seconds"),
+        "run_id": report_time.strftime("%Y%m%d-%H%M%S"),
         "schedule_slot": run_slot,
         "schedule_cron": GITHUB_EVENT_SCHEDULE,
         "github_event_name": GITHUB_EVENT_NAME,
@@ -349,10 +382,13 @@ def sync_to_cloud_history(
         print(f"📨 Google Sheets Web App 返回: HTTP {response.status_code} | {response_preview}")
         if "Success" in response.text:
             print("📈 仓位、盈亏与资产快照已成功同步至 Google Sheets History 表。")
+            return True
         else:
             print(f"⚠️ 云端历史同步返回异常: {response.text[:200]}")
+            return False
     except Exception as e:
         print(f"❌ 云端历史同步失败: {e}")
+        return False
 
 
 # ==========================================
@@ -517,8 +553,19 @@ def get_portfolio_status():
 
     try:
         csv_resp = requests.get(CSV_URL, timeout=15)
-        csv_resp.encoding = "utf-8"
+        csv_resp.raise_for_status()
+        csv_resp.encoding = "utf-8-sig"
+        if "<html" in csv_resp.text[:500].lower():
+            raise ValueError("PORTFOLIO_CSV_URL 返回了网页内容，请确认它是公开 CSV 链接。")
+
         reader = csv.DictReader(StringIO(csv_resp.text))
+        fieldnames = {str(name).strip().lower() for name in (reader.fieldnames or [])}
+        required_fields = {"asset_id", "quantity"}
+        if not required_fields.issubset(fieldnames):
+            raise ValueError(
+                "在线持仓表缺少 Asset_ID 或 Quantity 列，请检查 Google Sheet 发布的 CSV 范围。"
+            )
+
         exchange = ccxt.mexc()
 
         for row_number, row in enumerate(reader, start=2):
@@ -633,6 +680,10 @@ def get_portfolio_status():
         print(f"❌ 云端表格读取失败: {e}")
         return
 
+    if not asset_snapshots or total_market_value <= 0:
+        print("❌ 本次没有得到有效资产数据，已停止推送和写表，避免污染历史记录。")
+        return
+
     # --- 3. 核心再平衡逻辑测算 ---
     dev_lines = ["\n⚖️ <b>资产职责桶偏离度诊断:</b>"]
     for cat, cfg in PORTFOLIO_BUCKETS.items():
@@ -700,8 +751,7 @@ def get_portfolio_status():
     final_report += ai_comment
 
     print(final_report)
-    send_telegram_message(final_report)
-    sync_to_cloud_history(
+    sync_ok = sync_to_cloud_history(
         total_market_value,
         total_daily_profit,
         total_change_pct,
@@ -710,7 +760,15 @@ def get_portfolio_status():
         striking_alerts,
         report_session,
         rates,
+        report_time,
+        run_slot,
+        is_official_report,
     )
+    if sync_ok:
+        final_report += "\n📊 表格同步: 已写入 Google Sheets。"
+    else:
+        final_report += "\n⚠️ 表格同步: 未确认写入 Google Sheets，请检查 HISTORY_WEBAPP_URL 或 Apps Script 部署。"
+    send_telegram_message(final_report)
 
 
 if __name__ == "__main__":
