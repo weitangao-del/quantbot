@@ -4,17 +4,10 @@ on:
   workflow_dispatch:
   schedule:
     # Beijing time 09:23 / 15:23 / 21:23 / 03:23.
-    # Each slot has a backup trigger 20 minutes later. The Python program
-    # skips duplicate records for the same slot, so the backup only helps when
-    # GitHub drops or delays the primary scheduled event.
     - cron: "23 1 * * *"
-    - cron: "43 1 * * *"
     - cron: "23 7 * * *"
-    - cron: "43 7 * * *"
     - cron: "23 13 * * *"
-    - cron: "43 13 * * *"
     - cron: "23 19 * * *"
-    - cron: "43 19 * * *"
 
 jobs:
   run-monitor:
