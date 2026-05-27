@@ -81,7 +81,10 @@ function doGet(e) {
   const filteredHistory = view === "all" ? allHistory : allHistory.filter(isOfficialHistoryRow_);
   const history = filteredHistory.sort(compareHistoryDesc_).slice(0, limit);
   const latestRunId = history.length ? history[0].run_id : "";
-  const assets = readSheetObjects_(ss, "AssetSnapshots").filter((row) => row.run_id === latestRunId);
+  let assets = readSheetObjects_(ss, "AssetSnapshots").filter((row) => row.run_id === latestRunId);
+  if (assets.length === 0 && history.length) {
+    assets = parseJsonArray_(history[0].asset_snapshots_json);
+  }
   const payload = {
     status: "Success",
     generated_at: new Date().toISOString(),
@@ -110,13 +113,20 @@ function isOfficialHistoryRow_(row) {
   if (row.is_official_report === true || row.is_official_report === "TRUE" || row.is_official_report === "true") {
     return true;
   }
+  if (row.schedule_slot === "official_0900") {
+    return true;
+  }
   if (String(row.record_type || "").toLowerCase() === "official") {
     return true;
   }
   if (row.is_official_report !== "" && row.is_official_report !== undefined && row.is_official_report !== null) {
     return false;
   }
-  return row.session === "早盘市场汇报" || row.session === "晚盘市场汇报";
+  if (row.session !== "早盘市场汇报") {
+    return false;
+  }
+  const hour = historyHour_(row);
+  return hour === null || (hour >= 5 && hour < 12);
 }
 
 function compareHistoryDesc_(a, b) {
@@ -132,6 +142,33 @@ function historyScore_(row) {
   const runId = String(row.run_id || "").replace(/\D/g, "");
   const numericRunId = Number(runId);
   return Number.isFinite(numericRunId) ? numericRunId : 0;
+}
+
+function historyHour_(row) {
+  const timestamp = row.timestamp || row.date || row.Date || "";
+  const date = new Date(timestamp);
+  if (!Number.isNaN(date.getTime())) {
+    return date.getHours();
+  }
+
+  const runId = String(row.run_id || "");
+  const match = runId.match(/-(\d{2})/);
+  return match ? Number(match[1]) : null;
+}
+
+function parseJsonArray_(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
 }
 
 function appendDynamicRow_(ss, sheetName, rowObject) {
