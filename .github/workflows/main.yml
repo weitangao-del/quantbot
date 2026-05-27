@@ -3,20 +3,26 @@ name: Portfolio Monitor
 on:
   workflow_dispatch:
   schedule:
-    # Beijing time 09:07/09:17/09:27 and 17:07/17:17/17:27.
-    # Keep these as explicit entries instead of a compact comma expression so
-    # GitHub shows and evaluates each attempt independently.
-    # The Python program skips duplicates after the first successful official record.
-    - cron: "7 1 * * *"
-    - cron: "17 1 * * *"
-    - cron: "27 1 * * *"
-    - cron: "7 9 * * *"
-    - cron: "17 9 * * *"
-    - cron: "27 9 * * *"
+    # Beijing time 09:23 / 15:23 / 21:23 / 03:23.
+    # Each slot has a backup trigger 20 minutes later. The Python program
+    # skips duplicate records for the same slot, so the backup only helps when
+    # GitHub drops or delays the primary scheduled event.
+    - cron: "23 1 * * *"
+    - cron: "43 1 * * *"
+    - cron: "23 7 * * *"
+    - cron: "43 7 * * *"
+    - cron: "23 13 * * *"
+    - cron: "43 13 * * *"
+    - cron: "23 19 * * *"
+    - cron: "43 19 * * *"
 
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: portfolio-monitor
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository
@@ -40,4 +46,6 @@ jobs:
           PORTFOLIO_CSV_URL: ${{ secrets.PORTFOLIO_CSV_URL }}
           HISTORY_WEBAPP_URL: ${{ secrets.HISTORY_WEBAPP_URL }}
           REPORT_TIMEZONE: Asia/Shanghai
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: python portfolio_monitor.py
