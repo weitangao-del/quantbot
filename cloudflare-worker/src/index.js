@@ -78,9 +78,12 @@ function normalizeDashboardPayload(payload, view) {
   const history = Array.isArray(payload.history)
     ? payload.history.map(normalizeRow).sort(compareHistoryDesc)
     : [];
-  const assets = Array.isArray(payload.assets)
+  let assets = Array.isArray(payload.assets)
     ? payload.assets.map(normalizeRow).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0))
     : [];
+  if (assets.length === 0 && history.length) {
+    assets = parseEmbeddedAssets(history[0]).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
+  }
   return {
     status: "Success",
     view: payload.view || view,
@@ -91,6 +94,22 @@ function normalizeDashboardPayload(payload, view) {
     history,
     assets
   };
+}
+
+function parseEmbeddedAssets(row) {
+  const raw = row.asset_snapshots_json;
+  if (!raw) {
+    return [];
+  }
+  if (Array.isArray(raw)) {
+    return raw.map(normalizeRow);
+  }
+  try {
+    const parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed.map(normalizeRow) : [];
+  } catch (error) {
+    return [];
+  }
 }
 
 function compareHistoryDesc(a, b) {
