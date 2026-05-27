@@ -102,6 +102,15 @@ def get_report_session(now):
     return "盘中市场汇报"
 
 
+def is_official_report_run(now):
+    forced = os.getenv("FORCE_OFFICIAL_REPORT", "").strip().lower()
+    if forced in {"1", "true", "yes"}:
+        return True
+    if forced in {"0", "false", "no"}:
+        return False
+    return os.getenv("GITHUB_EVENT_NAME") == "schedule" and now.hour in {9, 17}
+
+
 # ==========================================
 # 2. 核心工具与通信模块
 # ==========================================
@@ -218,12 +227,15 @@ def sync_to_cloud_history(
 
     now = local_now()
     bucket_snapshot = build_bucket_snapshot(category_stats, total_value)
+    is_official_report = is_official_report_run(now)
     payload = {
         "date": now.strftime("%Y-%m-%d"),
         "timestamp": now.isoformat(timespec="seconds"),
         "run_id": now.strftime("%Y%m%d-%H%M%S"),
         "append_mode": "portfolio_snapshot_v2",
         "session": report_session,
+        "record_type": "official" if is_official_report else "ad_hoc",
+        "is_official_report": is_official_report,
         "total_value": round(total_value, 2),
         "daily_profit": round(daily_profit, 2),
         "daily_change_pct": round(total_change_pct, 4),
