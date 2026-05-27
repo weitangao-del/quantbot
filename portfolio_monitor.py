@@ -111,6 +111,27 @@ def is_official_report_run(now):
     return os.getenv("GITHUB_EVENT_NAME") == "schedule"
 
 
+def official_record_already_exists(report_time, report_session):
+    webhook_url = os.getenv("HISTORY_WEBAPP_URL")
+    if not webhook_url:
+        return False
+
+    try:
+        response = requests.get(f"{webhook_url}?view=official&limit=80", timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as e:
+        print(f"⚠️ 无法检查正式记录去重状态，将继续执行本次推送: {e}")
+        return False
+
+    report_date = report_time.strftime("%Y-%m-%d")
+    for row in payload.get("history", []):
+        if row.get("date") == report_date and row.get("session") == report_session:
+            print(f"ℹ️ {report_date} {report_session} 已有正式记录，本次冗余触发跳过推送。")
+            return True
+    return False
+
+
 # ==========================================
 # 2. 核心工具与通信模块
 # ==========================================
@@ -351,6 +372,8 @@ def get_ai_summary(report_text, dev_text, alerts_text):
 def get_portfolio_status():
     report_time = local_now()
     report_session = get_report_session(report_time)
+    if is_official_report_run(report_time) and official_record_already_exists(report_time, report_session):
+        return
     print(f"🚀 启动跨市场全天候监控引擎 ({report_time.strftime('%Y-%m-%d %H:%M:%S')})...\n")
 
     if not CSV_URL:
