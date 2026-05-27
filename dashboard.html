@@ -399,7 +399,7 @@
           cleanup();
           reject(new Error("无法读取 Google Sheet 数据接口"));
         };
-        script.src = `${url}?callback=${callback}&limit=120&ts=${Date.now()}`;
+        script.src = `${url}?callback=${callback}&limit=120&view=official&ts=${Date.now()}`;
         document.body.appendChild(script);
       });
     }
@@ -422,6 +422,9 @@
     function render(data) {
       const history = normalizeRows(data.history || []);
       const assets = normalizeRows(data.assets || []);
+      if (history.length === 0) {
+        throw new Error("还没有正式记录。等 09:00 / 17:00 定时任务跑完后，这里会自动显示；临时手动运行不会进入主视图。");
+      }
       const latest = history[history.length - 1] || {};
       const sortedAssets = [...assets].sort((a, b) => number(b.cny_value) - number(a.cny_value));
       const largest = sortedAssets[0] || {};
@@ -443,7 +446,8 @@
       renderRiskList(latest);
       renderAssetRows(sortedAssets);
 
-      setStatus(`已更新：${latest.timestamp || data.generated_at || "--"}，资产 ${assets.length} 项`);
+      const hiddenRows = Math.max(number(data.total_history_rows) - number(data.visible_history_rows), 0);
+      setStatus(`正式视图：${latest.timestamp || data.generated_at || "--"}，资产 ${assets.length} 项，已隐藏临时记录 ${hiddenRows} 条`);
     }
 
     function normalizeRows(rows) {
