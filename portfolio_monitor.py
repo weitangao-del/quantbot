@@ -20,6 +20,19 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CSV_URL = os.getenv("PORTFOLIO_CSV_URL")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Shanghai")
+GITHUB_EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "").strip()
+GITHUB_EVENT_SCHEDULE = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
+
+SCHEDULE_SLOTS = {
+    "23 1 * * *": ("official_0900", True),
+    "43 1 * * *": ("official_0900", True),
+    "23 7 * * *": ("ad_hoc_1500", False),
+    "43 7 * * *": ("ad_hoc_1500", False),
+    "23 13 * * *": ("ad_hoc_2100", False),
+    "43 13 * * *": ("ad_hoc_2100", False),
+    "23 19 * * *": ("ad_hoc_0300", False),
+    "43 19 * * *": ("ad_hoc_0300", False),
+}
 
 # 顶层资产桶：不要再按市场分，而是按这笔资产在组合里的职责分。
 PORTFOLIO_BUCKETS = {
@@ -102,34 +115,60 @@ def get_report_session(now):
     return "盘中市场汇报"
 
 
+def get_schedule_slot(now):
+    if GITHUB_EVENT_NAME == "schedule":
+        slot = SCHEDULE_SLOTS.get(GITHUB_EVENT_SCHEDULE)
+        if slot:
+            return slot[0]
+        return f"scheduled_{now.strftime('%H%M')}"
+    return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
+
+
 def is_official_report_run(now):
     forced = os.getenv("FORCE_OFFICIAL_REPORT", "").strip().lower()
     if forced in {"1", "true", "yes"}:
         return True
     if forced in {"0", "false", "no"}:
         return False
-    return os.getenv("GITHUB_EVENT_NAME") == "schedule"
+    if GITHUB_EVENT_NAME != "schedule":
+        return False
+    slot = SCHEDULE_SLOTS.get(GITHUB_EVENT_SCHEDULE)
+    return bool(slot and slot[1])
 
 
-def official_record_already_exists(report_time, report_session):
+def scheduled_record_already_exists(report_time, run_slot, is_official_report):
+    if GITHUB_EVENT_NAME != "schedule":
+        return False
+
     webhook_url = os.getenv("HISTORY_WEBAPP_URL")
     if not webhook_url:
         return False
 
     try:
-        response = requests.get(f"{webhook_url}?view=official&limit=80", timeout=15)
+        response = requests.get(f"{webhook_url}?view=all&limit=240", timeout=15)
         response.raise_for_status()
         payload = response.json()
     except Exception as e:
-        print(f"⚠️ 无法检查正式记录去重状态，将继续执行本次推送: {e}")
+        print(f"⚠️ 无法检查定时记录去重状态，将继续执行本次运行: {e}")
         return False
 
     report_date = report_time.strftime("%Y-%m-%d")
     for row in payload.get("history", []):
-        if row.get("date") == report_date and row.get("session") == report_session:
-            print(f"ℹ️ {report_date} {report_session} 已有正式记录，本次冗余触发跳过推送。")
+        if row.get("date") != report_date:
+            continue
+        if row.get("schedule_slot") == run_slot:
+            print(f"ℹ️ {report_date} {run_slot} 已有记录，本次备用触发跳过。")
+            return True
+        if is_official_report and is_truthy(row.get("is_official_report")):
+            print(f"ℹ️ {report_date} 已有正式记录，本次备用触发跳过。")
             return True
     return False
+
+
+def is_truthy(value):
+    if value is True:
+        return True
+    return str(value).strip().lower() in {"true", "1", "yes"}
 
 
 # ==========================================
@@ -158,6 +197,28 @@ def as_float(value):
         if hasattr(squeezed, "iloc"):
             squeezed = squeezed.iloc[0]
         return float(squeezed)
+
+
+def get_cell(row, *names, default=""):
+    lowered = {str(key).strip().lower(): value for key, value in row.items()}
+    for name in names:
+        if name in row and row[name] not in (None, ""):
+            return row[name]
+        value = lowered.get(name.lower())
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def parse_number(value, default=0.0):
+    if value in (None, ""):
+        return default
+    cleaned = str(value).strip().replace(",", "").replace("¥", "").replace("$", "")
+    cleaned = cleaned.replace("%", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return default
 
 
 def send_telegram_message(report_text):
@@ -247,12 +308,16 @@ def sync_to_cloud_history(
         return
 
     now = local_now()
+    run_slot = get_schedule_slot(now)
     bucket_snapshot = build_bucket_snapshot(category_stats, total_value)
     is_official_report = is_official_report_run(now)
     payload = {
         "date": now.strftime("%Y-%m-%d"),
         "timestamp": now.isoformat(timespec="seconds"),
         "run_id": now.strftime("%Y%m%d-%H%M%S"),
+        "schedule_slot": run_slot,
+        "schedule_cron": GITHUB_EVENT_SCHEDULE,
+        "github_event_name": GITHUB_EVENT_NAME,
         "append_mode": "portfolio_snapshot_v2",
         "session": report_session,
         "record_type": "official" if is_official_report else "ad_hoc",
@@ -372,9 +437,14 @@ def get_ai_summary(report_text, dev_text, alerts_text):
 def get_portfolio_status():
     report_time = local_now()
     report_session = get_report_session(report_time)
-    if is_official_report_run(report_time) and official_record_already_exists(report_time, report_session):
+    run_slot = get_schedule_slot(report_time)
+    is_official_report = is_official_report_run(report_time)
+    if scheduled_record_already_exists(report_time, run_slot, is_official_report):
         return
-    print(f"🚀 启动跨市场全天候监控引擎 ({report_time.strftime('%Y-%m-%d %H:%M:%S')})...\n")
+    print(
+        f"🚀 启动跨市场全天候监控引擎 "
+        f"({report_time.strftime('%Y-%m-%d %H:%M:%S')} | slot={run_slot})...\n"
+    )
 
     if not CSV_URL:
         print("❌ 致命错误: 未配置 PORTFOLIO_CSV_URL。程序终止。")
@@ -451,25 +521,32 @@ def get_portfolio_status():
         reader = csv.DictReader(StringIO(csv_resp.text))
         exchange = ccxt.mexc()
 
-        for row in reader:
-            asset_id = row["Asset_ID"].strip()
-            asset_name = row.get("Asset_Name", asset_id).strip()
-            qty = float(row["Quantity"].strip())
-            cat = normalize_category(row.get("Category", ""), asset_name)
-            source = row["Data_Source"].strip()
-            currency = row.get("Currency", "CNY").strip().upper()
+        for row_number, row in enumerate(reader, start=2):
+            asset_id = str(get_cell(row, "Asset_ID", "asset_id")).strip()
+            if not asset_id:
+                continue
+
+            asset_name = str(get_cell(row, "Asset_Name", "asset_name", default=asset_id)).strip() or asset_id
+            qty = parse_number(get_cell(row, "Quantity", "quantity"), None)
+            if qty is None:
+                print(f"⚠️ 第 {row_number} 行 {asset_name} 的 Quantity 无法识别，已跳过。")
+                continue
+
+            cat = normalize_category(get_cell(row, "Category", "category"), asset_name)
+            source = str(get_cell(row, "Data_Source", "source", default="FIXED")).strip().upper()
+            currency = str(get_cell(row, "Currency", "currency", default="CNY")).strip().upper() or "CNY"
 
             val_local = 0.0
             profit_local = 0.0
             change_pct = 0.0
 
             try:
-                if source == "FIXED":
+                if source in {"FIXED", "MANUAL", "CASH"}:
                     val_local = qty
                     profit_local = 0.0
                     change_pct = 0.0
 
-                elif asset_id.startswith("f") or source == "AKSHARE_FUND":
+                elif asset_id.startswith("f") or source in {"AKSHARE_FUND", "FUND"}:
                     clean_code = asset_id.replace("f", "")
                     fund_data = ak.fund_open_fund_info_em(symbol=clean_code, indicator="单位净值走势")
                     if not fund_data.empty:
@@ -483,6 +560,16 @@ def get_portfolio_status():
                     else:
                         raise Exception("Akshare 未返回数据")
 
+                elif source in {"YFINANCE", "YAHOO", "YAHOO_FINANCE"}:
+                    yf_data = yf.download(asset_id, period="5d", progress=False)
+                    if yf_data.empty:
+                        raise Exception("YFinance 未返回数据")
+                    price = as_float(yf_data["Close"].iloc[-1])
+                    prev_price = as_float(yf_data["Close"].iloc[-2]) if len(yf_data) >= 2 else price
+                    change_pct = ((price - prev_price) / prev_price * 100) if prev_price else 0.0
+                    val_local = price * qty
+                    profit_local = val_local - (val_local / (1 + change_pct / 100)) if change_pct != 0 else 0
+
                 elif source == "TENCENT":
                     resp = session.get(f"http://qt.gtimg.cn/q={asset_id}", timeout=5)
                     resp.encoding = "gbk"
@@ -493,13 +580,16 @@ def get_portfolio_status():
                         val_local = price * qty
                         profit_local = val_local - (val_local / (1 + change_pct / 100)) if change_pct != 0 else 0
 
-                elif source == "CCXT_MEXC":
+                elif source in {"CCXT_MEXC", "CCXT", "MEXC"}:
                     ticker = exchange.fetch_ticker(asset_id)
                     price = ticker["last"]
-                    change_pct = float(ticker.get("percentage", 0))
+                    change_pct = parse_number(ticker.get("percentage"), 0.0)
                     val_local = price * qty
                     profit_local = val_local - (val_local / (1 + change_pct / 100)) if change_pct != 0 else 0
                     currency = "USD"
+
+                else:
+                    raise Exception(f"未知 Data_Source: {source}")
 
                 conv_rate = rates.get(currency, 1.0)
                 val_cny = val_local * conv_rate
