@@ -6,6 +6,9 @@ function doPost(e) {
     run_id: payload.run_id,
     timestamp: payload.timestamp,
     date: payload.date,
+    schedule_slot: payload.schedule_slot,
+    schedule_cron: payload.schedule_cron,
+    github_event_name: payload.github_event_name,
     session: payload.session,
     record_type: payload.record_type,
     is_official_report: payload.is_official_report,
@@ -33,6 +36,7 @@ function doPost(e) {
     liquidity_diff: payload.liquidity_diff,
     liquidity_status: payload.liquidity_status,
     bucket_snapshot_json: payload.bucket_snapshot_json,
+    asset_snapshots_json: payload.asset_snapshots_json,
     striking_alerts_json: payload.striking_alerts_json,
   });
 
@@ -75,8 +79,8 @@ function doGet(e) {
   const view = e.parameter.view || "official";
   const allHistory = readSheetObjects_(ss, "History");
   const filteredHistory = view === "all" ? allHistory : allHistory.filter(isOfficialHistoryRow_);
-  const history = filteredHistory.slice(-limit);
-  const latestRunId = history.length ? history[history.length - 1].run_id : "";
+  const history = filteredHistory.sort(compareHistoryDesc_).slice(0, limit);
+  const latestRunId = history.length ? history[0].run_id : "";
   const assets = readSheetObjects_(ss, "AssetSnapshots").filter((row) => row.run_id === latestRunId);
   const payload = {
     status: "Success",
@@ -106,13 +110,28 @@ function isOfficialHistoryRow_(row) {
   if (row.is_official_report === true || row.is_official_report === "TRUE" || row.is_official_report === "true") {
     return true;
   }
-  if (row.record_type === "official") {
+  if (String(row.record_type || "").toLowerCase() === "official") {
     return true;
   }
   if (row.is_official_report !== "" && row.is_official_report !== undefined && row.is_official_report !== null) {
     return false;
   }
   return row.session === "早盘市场汇报" || row.session === "晚盘市场汇报";
+}
+
+function compareHistoryDesc_(a, b) {
+  return historyScore_(b) - historyScore_(a);
+}
+
+function historyScore_(row) {
+  const timestamp = row.timestamp || row.date || row.Date || "";
+  const time = new Date(timestamp).getTime();
+  if (!Number.isNaN(time)) {
+    return time;
+  }
+  const runId = String(row.run_id || "").replace(/\D/g, "");
+  const numericRunId = Number(runId);
+  return Number.isFinite(numericRunId) ? numericRunId : 0;
 }
 
 function appendDynamicRow_(ss, sheetName, rowObject) {
@@ -144,7 +163,7 @@ function readSheetObjects_(ss, sheetName) {
 
   const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
   const headers = values[0].map(String);
-  return values.slice(1).map((row) => {
+  return values.slice(1).filter((row) => row.some((cell) => cell !== "")).map((row) => {
     const object = {};
     headers.forEach((header, index) => {
       object[header] = row[index];
