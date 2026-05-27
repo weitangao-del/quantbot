@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
   schedule:
     # Beijing time 09:07/09:17/09:27 and 17:07/17:17/17:27.
-    # Redundant attempts are intentional; the program skips duplicates after
-    # the first successful official record.
-    - cron: "7,17,27 1,9 * * *"
+    # Keep these as explicit entries instead of a compact comma expression so
+    # GitHub shows and evaluates each attempt independently.
+    # The Python program skips duplicates after the first successful official record.
+    - cron: "7 1 * * *"
+    - cron: "17 1 * * *"
+    - cron: "27 1 * * *"
+    - cron: "7 9 * * *"
+    - cron: "17 9 * * *"
+    - cron: "27 9 * * *"
 
 jobs:
   run-monitor:
