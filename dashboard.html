@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>QuantBot Asset Dashboard</title>
+  <title>TONG-资管 Web</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #1f2933;
-      --muted: #64707d;
-      --line: #d9dee5;
-      --green: #168a50;
-      --red: #c43b3b;
-      --blue: #2359a7;
-      --gold: #b8860b;
-      --purple: #7a4eb3;
-      --radius: 8px;
+      --bg: #eef3f8;
+      --panel: rgba(255, 255, 255, 0.94);
+      --panel-strong: #ffffff;
+      --text: #17212b;
+      --muted: #617182;
+      --line: #d9e1ea;
+      --line-strong: #c6d2dd;
+      --primary: #0b5bd3;
+      --primary-soft: rgba(11, 91, 211, 0.1);
+      --green: #0f8a47;
+      --red: #c53a3a;
+      --amber: #a56b00;
+      --navy: #14324d;
+      --radius: 10px;
+      --shadow: 0 18px 50px rgba(20, 50, 77, 0.08);
+      --font: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
     }
 
     * {
@@ -27,55 +32,124 @@
 
     body {
       margin: 0;
-      background: var(--bg);
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(11, 91, 211, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(15, 138, 71, 0.08), transparent 22%),
+        linear-gradient(180deg, #f7fafc 0%, var(--bg) 100%);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font);
     }
 
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 14px 22px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(10px);
+    .shell {
+      width: min(1480px, calc(100% - 28px));
+      margin: 20px auto 36px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 18px;
+      padding: 18px 22px;
+      border: 1px solid rgba(198, 210, 221, 0.72);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     h1 {
       margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-
-    main {
-      width: min(1500px, 100%);
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    button {
-      min-height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      color: var(--text);
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    button:hover {
-      border-color: #9ca8b5;
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1;
+      font-weight: 760;
     }
 
     .status {
-      font-size: 13px;
+      margin-top: 10px;
       color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+      justify-items: end;
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-auto-flow: column;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(239, 244, 250, 0.9);
+    }
+
+    .segment,
+    .action-btn {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+      transition: 160ms ease;
+    }
+
+    .segment {
+      min-width: 112px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .segment.active {
+      background: var(--panel-strong);
+      color: var(--navy);
+      border-color: var(--line);
+      box-shadow: 0 6px 14px rgba(20, 50, 77, 0.08);
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .action-btn {
+      min-height: 42px;
+      padding: 0 16px;
+      border-color: var(--line);
+      background: var(--panel-strong);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .action-btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .action-btn:hover,
+    .segment:hover {
+      transform: translateY(-1px);
     }
 
     .grid {
@@ -85,68 +159,89 @@
 
     .metrics {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 14px;
     }
 
-    .charts {
-      grid-template-columns: 1.15fr 0.85fr;
-      margin-top: 14px;
+    .main-grid {
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+      align-items: start;
     }
 
-    .wide {
-      grid-column: 1 / -1;
-    }
-
-    .panel,
     .metric,
-    .asset-table-wrap {
-      background: var(--panel);
-      border: 1px solid var(--line);
+    .panel {
+      border: 1px solid rgba(198, 210, 221, 0.76);
       border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
     }
 
     .metric {
-      padding: 14px;
-      min-height: 92px;
+      min-height: 124px;
+      padding: 16px;
     }
 
-    .metric .label {
+    .metric-label {
       color: var(--muted);
       font-size: 12px;
-      font-weight: 650;
+      font-weight: 700;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
-    .metric .value {
-      margin-top: 8px;
-      font-size: 25px;
+    .metric-value {
+      margin-top: 12px;
+      font-size: clamp(24px, 3.1vw, 34px);
+      line-height: 1.04;
       font-weight: 760;
       letter-spacing: 0;
       overflow-wrap: anywhere;
     }
 
-    .metric .sub {
-      margin-top: 5px;
+    .metric-sub {
+      margin-top: 8px;
       color: var(--muted);
       font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .positive {
+      color: var(--green);
+    }
+
+    .negative {
+      color: var(--red);
     }
 
     .panel {
-      min-height: 340px;
-      padding: 14px;
+      padding: 16px;
+    }
+
+    .panel + .panel {
+      margin-top: 14px;
     }
 
     .panel-head {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    h2,
+    h3 {
+      margin: 0;
+      letter-spacing: 0;
     }
 
     h2 {
-      margin: 0;
+      font-size: 17px;
+      font-weight: 740;
+    }
+
+    h3 {
       font-size: 15px;
-      letter-spacing: 0;
+      font-weight: 720;
     }
 
     .panel-note {
@@ -157,24 +252,190 @@
 
     .chart-box {
       position: relative;
-      height: 285px;
+      height: 308px;
     }
 
-    .asset-table-wrap {
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
       margin-top: 14px;
+    }
+
+    .record-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .record-item {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfdff;
+      text-align: left;
+      cursor: pointer;
+      transition: 160ms ease;
+    }
+
+    .record-item.active {
+      border-color: rgba(11, 91, 211, 0.34);
+      background: var(--primary-soft);
+      box-shadow: inset 0 0 0 1px rgba(11, 91, 211, 0.12);
+    }
+
+    .record-item:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
+    }
+
+    .record-top,
+    .detail-row,
+    .bucket-row,
+    .asset-row,
+    .signal-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+
+    .record-top strong,
+    .detail-main strong {
+      font-size: 15px;
+      font-weight: 740;
+    }
+
+    .record-meta,
+    .detail-meta,
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .record-profit,
+    .detail-profit {
+      font-size: 14px;
+      font-weight: 740;
+    }
+
+    .detail-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfdff;
+    }
+
+    .detail-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .detail-box {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .detail-box .muted {
+      margin-bottom: 6px;
+    }
+
+    .bucket-list,
+    .asset-list,
+    .signal-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .bucket-row,
+    .asset-row,
+    .signal-row {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .bucket-name,
+    .asset-name {
+      font-size: 14px;
+      font-weight: 720;
+    }
+
+    .bucket-extra,
+    .asset-extra {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      min-width: 68px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #edf2f8;
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.warn {
+      background: rgba(197, 58, 58, 0.1);
+      color: var(--red);
+    }
+
+    .empty {
+      padding: 18px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .error {
+      display: none;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(197, 58, 58, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 244, 244, 0.94);
+      color: #982626;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .table-wrap {
       overflow: auto;
+      margin-top: 14px;
+      border: 1px solid rgba(198, 210, 221, 0.76);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
     }
 
     table {
       width: 100%;
+      min-width: 980px;
       border-collapse: collapse;
-      min-width: 940px;
       font-size: 13px;
     }
 
     th,
     td {
-      padding: 10px 12px;
+      padding: 12px 14px;
       border-bottom: 1px solid var(--line);
       text-align: right;
       white-space: nowrap;
@@ -190,159 +451,190 @@
     th {
       position: sticky;
       top: 0;
-      background: #fbfcfd;
+      background: #f8fbfe;
       color: var(--muted);
-      font-weight: 700;
-    }
-
-    .positive {
-      color: var(--green);
-    }
-
-    .negative {
-      color: var(--red);
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 24px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: #eef2f7;
-      color: #3d4854;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 760;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
 
-    .risk-list {
-      display: grid;
-      gap: 9px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
+    tr:last-child td {
+      border-bottom: 0;
     }
 
-    .risk-list li {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fbfcfd;
+    .footer-note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
     }
 
-    .error {
-      margin-top: 14px;
-      padding: 12px;
-      border: 1px solid #f0c2c2;
-      border-radius: 6px;
-      background: #fff5f5;
-      color: #9b2424;
-      display: none;
-    }
-
-    @media (max-width: 960px) {
-      header {
-        align-items: flex-start;
-        flex-direction: column;
+    @media (max-width: 1120px) {
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      main {
-        padding: 14px;
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        width: min(100% - 18px, 100%);
+        margin: 10px auto 24px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+
+      .controls {
+        justify-items: stretch;
+      }
+
+      .segmented {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .segment {
+        min-width: 0;
+      }
+
+      .action-row {
+        justify-content: stretch;
+      }
+
+      .action-btn {
+        flex: 1 1 0;
       }
 
       .metrics,
-      .charts {
+      .mini-grid,
+      .detail-summary {
         grid-template-columns: 1fr;
       }
 
-      .metric .value {
-        font-size: 22px;
+      .chart-box {
+        height: 260px;
       }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>QuantBot Asset Dashboard</h1>
-      <div class="status" id="status">正在读取资产快照...</div>
-    </div>
-    <button id="refreshBtn" type="button">刷新</button>
-  </header>
-
-  <main>
-    <section class="grid metrics" aria-label="portfolio metrics">
-      <div class="metric">
-        <div class="label">Total AUM</div>
-        <div class="value" id="aum">--</div>
-        <div class="sub" id="runId">--</div>
+  <div class="shell">
+    <section class="topbar">
+      <div>
+        <p class="eyebrow">TONG CAPITAL CONSOLE</p>
+        <h1>TONG-资管</h1>
+        <div class="status" id="status">正在读取资产快照...</div>
       </div>
-      <div class="metric">
-        <div class="label">Daily P/L</div>
-        <div class="value" id="dailyProfit">--</div>
-        <div class="sub" id="dailyPct">--</div>
-      </div>
-      <div class="metric">
-        <div class="label">Largest Asset</div>
-        <div class="value" id="largestAsset">--</div>
-        <div class="sub" id="largestAssetValue">--</div>
-      </div>
-      <div class="metric">
-        <div class="label">Risk Flag</div>
-        <div class="value" id="riskFlag">--</div>
-        <div class="sub" id="riskSub">--</div>
+      <div class="controls">
+        <div class="segmented" role="tablist" aria-label="record view">
+          <button class="segment" data-view="official" type="button">正式记录</button>
+          <button class="segment active" data-view="all" type="button">全部记录</button>
+        </div>
+        <div class="action-row">
+          <button class="action-btn" id="refreshBtn" type="button">刷新</button>
+          <button class="action-btn primary" id="refreshRealtimeBtn" type="button">强制刷新数据</button>
+        </div>
       </div>
     </section>
 
     <div class="error" id="error"></div>
 
-    <section class="grid charts">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>AUM & P/L History</h2>
-          <div class="panel-note">最近 120 条记录</div>
+    <section class="grid metrics" aria-label="portfolio metrics">
+      <article class="metric">
+        <div class="metric-label">Latest AUM</div>
+        <div class="metric-value" id="aum">--</div>
+        <div class="metric-sub" id="runTime">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Daily P/L</div>
+        <div class="metric-value" id="dailyProfit">--</div>
+        <div class="metric-sub" id="dailyPct">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Largest Holding</div>
+        <div class="metric-value" id="largestAsset">--</div>
+        <div class="metric-sub" id="largestAssetValue">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Risk State</div>
+        <div class="metric-value" id="riskFlag">--</div>
+        <div class="metric-sub" id="riskSub">--</div>
+      </article>
+    </section>
+
+    <section class="grid main-grid">
+      <div>
+        <article class="panel">
+          <div class="panel-head">
+            <h2>AUM 走势</h2>
+            <div class="panel-note" id="historyNote">最近记录</div>
+          </div>
+          <div class="chart-box"><canvas id="historyChart"></canvas></div>
+        </article>
+
+        <div class="mini-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h3>当前仓位</h3>
+              <div class="panel-note">实际权重</div>
+            </div>
+            <div class="chart-box"><canvas id="allocationChart"></canvas></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <h3>偏离目标</h3>
+              <div class="panel-note">实际 - 目标</div>
+            </div>
+            <div class="chart-box"><canvas id="driftChart"></canvas></div>
+          </article>
         </div>
-        <div class="chart-box"><canvas id="historyChart"></canvas></div>
       </div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Current Allocation</h2>
-          <div class="panel-note">实际仓位</div>
-        </div>
-        <div class="chart-box"><canvas id="allocationChart"></canvas></div>
-      </div>
+      <div>
+        <article class="panel">
+          <div class="panel-head">
+            <h2>最近记录</h2>
+            <div class="panel-note" id="recordCount">--</div>
+          </div>
+          <div class="record-list" id="recordList"></div>
+        </article>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Target Drift</h2>
-          <div class="panel-note">实际 - 目标</div>
-        </div>
-        <div class="chart-box"><canvas id="driftChart"></canvas></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Daily Profit Contribution</h2>
-          <div class="panel-note">按底层资产</div>
-        </div>
-        <div class="chart-box"><canvas id="profitChart"></canvas></div>
-      </div>
-
-      <div class="panel wide">
-        <div class="panel-head">
-          <h2>Risk & Action Signals</h2>
-          <div class="panel-note">资产桶状态</div>
-        </div>
-        <ul class="risk-list" id="riskList"></ul>
+        <article class="panel">
+          <div class="panel-head">
+            <h2>记录详情</h2>
+            <div class="panel-note">点击左侧记录查看</div>
+          </div>
+          <div id="detailCard"></div>
+        </article>
       </div>
     </section>
 
-    <section class="asset-table-wrap" aria-label="asset snapshots">
+    <section class="grid main-grid" style="margin-top: 14px;">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>资产盈亏贡献</h2>
+          <div class="panel-note">按最新快照前 12 项</div>
+        </div>
+        <div class="chart-box"><canvas id="profitChart"></canvas></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>仓位提醒</h2>
+          <div class="panel-note">按职责桶判断</div>
+        </div>
+        <div class="bucket-list" id="riskList"></div>
+      </article>
+    </section>
+
+    <section class="table-wrap" aria-label="latest asset snapshot">
       <table>
         <thead>
           <tr>
@@ -350,7 +642,7 @@
             <th>职责桶</th>
             <th>币种</th>
             <th>数量</th>
-            <th>本币市值</th>
+            <th>原币金额</th>
             <th>人民币市值</th>
             <th>日盈亏</th>
             <th>涨跌幅</th>
@@ -359,95 +651,411 @@
         <tbody id="assetRows"></tbody>
       </table>
     </section>
-  </main>
+
+    <div class="footer-note" id="footerNote">数据来源：Cloudflare Worker / Google Sheets</div>
+  </div>
 
   <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxsZpvRQMGmayN7qupw0Ul_IqyxyJPcO76_QfjJWeDjR6LqLt9ZcCpDJlpf4sFLbi_x/exec";
+    const API_URL = "https://quantbot-dashboard-api.weitangao.workers.dev/dashboard";
     const bucketLabels = {
       beta_core: "Beta核心仓",
       alpha_satellite: "Alpha卫星仓",
       defense: "防守仓",
       liquidity: "流动性弹药",
     };
-    const bucketColors = ["#2359a7", "#7a4eb3", "#b8860b", "#168a50"];
+    const bucketColors = ["#0b5bd3", "#6d4ccf", "#b27a11", "#0f8a47"];
     const charts = {};
+    const state = {
+      view: "all",
+      refresh: false,
+      history: [],
+      assets: [],
+      raw: null,
+      selectedRunId: "",
+    };
 
-    document.getElementById("refreshBtn").addEventListener("click", loadDashboard);
+    document.getElementById("refreshBtn").addEventListener("click", () => loadDashboard(false));
+    document.getElementById("refreshRealtimeBtn").addEventListener("click", () => loadDashboard(true));
+    document.querySelectorAll(".segment").forEach((button) => {
+      button.addEventListener("click", () => switchView(button.dataset.view));
+    });
+
     loadDashboard();
 
-    function jsonp(url) {
-      return new Promise((resolve, reject) => {
-        const callback = `quantbotDashboard_${Date.now()}_${Math.round(Math.random() * 10000)}`;
-        const script = document.createElement("script");
-        const timeout = window.setTimeout(() => {
-          cleanup();
-          reject(new Error("数据读取超时"));
-        }, 20000);
-
-        window[callback] = (payload) => {
-          cleanup();
-          resolve(payload);
-        };
-
-        function cleanup() {
-          window.clearTimeout(timeout);
-          delete window[callback];
-          script.remove();
-        }
-
-        script.onerror = () => {
-          cleanup();
-          reject(new Error("无法读取 Google Sheet 数据接口"));
-        };
-        script.src = `${url}?callback=${callback}&limit=120&view=official&ts=${Date.now()}`;
-        document.body.appendChild(script);
+    function switchView(view) {
+      if (!view || view === state.view) return;
+      state.view = view;
+      document.querySelectorAll(".segment").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === view);
       });
+      loadDashboard();
     }
 
-    async function loadDashboard() {
+    async function loadDashboard(refresh = false) {
       setStatus("正在读取资产快照...");
       hideError();
       try {
-        const data = await jsonp(WEB_APP_URL);
-        if (!data || data.status !== "Success") {
-          throw new Error("数据接口没有返回 Success");
+        const data = await fetchDashboard(state.view, refresh);
+        const history = sortHistory(normalizeRows(data.history || []));
+        if (!history.length) {
+          throw new Error(
+            state.view === "official"
+              ? "正式记录暂时为空。先切到“全部记录”就能立刻使用，等下一次正式结算写入后这里会自动恢复。"
+              : "当前还没有可显示的记录。"
+          );
         }
-        render(data);
+
+        const assets = normalizeRows(data.assets || [])
+          .slice()
+          .sort((a, b) => number(b.cny_value) - number(a.cny_value));
+
+        state.raw = data;
+        state.history = history;
+        state.assets = assets;
+        if (!state.selectedRunId || !history.some((row) => row.run_id === state.selectedRunId)) {
+          state.selectedRunId = history[0].run_id || "";
+        }
+
+        render();
       } catch (error) {
-        showError(error.message);
+        clearSurface();
+        showError(error.message || "读取失败");
         setStatus("读取失败");
       }
     }
 
-    function render(data) {
-      const history = normalizeRows(data.history || []);
-      const assets = normalizeRows(data.assets || []);
-      if (history.length === 0) {
-        throw new Error("还没有正式记录。等 09:00 / 17:00 定时任务跑完后，这里会自动显示；临时手动运行不会进入主视图。");
+    async function fetchDashboard(view, refresh) {
+      const url = `${API_URL}?view=${encodeURIComponent(view)}&limit=120${refresh ? "&refresh=1" : ""}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`接口读取失败（HTTP ${response.status}）`);
       }
-      const latest = history[history.length - 1] || {};
-      const sortedAssets = [...assets].sort((a, b) => number(b.cny_value) - number(a.cny_value));
-      const largest = sortedAssets[0] || {};
+      const data = await response.json();
+      if (!data || data.status !== "Success") {
+        throw new Error("接口返回异常，未拿到有效资产数据");
+      }
+      return data;
+    }
+
+    function render() {
+      const latest = state.history[0];
+      const latestAssets = assetsForRun(latest.run_id);
+      const largest = latestAssets[0] || state.assets[0] || {};
       const risk = riskSummary(latest);
+      const hiddenRows = Math.max(number(state.raw.total_history_rows) - number(state.raw.visible_history_rows), 0);
 
       document.getElementById("aum").textContent = money(latest.total_value);
-      document.getElementById("runId").textContent = latest.timestamp || data.latest_run_id || "--";
+      document.getElementById("runTime").textContent = `${shortTime(latest.timestamp || latest.date)} · ${latest.session || latest.record_type || "记录"}`;
       setSignedMetric("dailyProfit", latest.daily_profit, money);
-      setSignedMetric("dailyPct", latest.daily_change_pct, (value) => `${number(value).toFixed(2)}%`);
+      setSignedMetric("dailyPct", latest.daily_change_pct, (value) => `${value.toFixed(2)}%`);
       document.getElementById("largestAsset").textContent = largest.asset_name || "--";
-      document.getElementById("largestAssetValue").textContent = largest.cny_value ? money(largest.cny_value) : "--";
+      document.getElementById("largestAssetValue").textContent = formatHoldingValue(largest);
       document.getElementById("riskFlag").textContent = risk.title;
       document.getElementById("riskSub").textContent = risk.subtitle;
+      document.getElementById("recordCount").textContent = `${state.history.length} 条记录`;
+      document.getElementById("historyNote").textContent =
+        state.view === "official" ? "近 7 天正式结算" : "近 120 条全部记录";
+      document.getElementById("footerNote").textContent =
+        `${state.view === "official" ? "正式记录" : "全部记录"} · 隐藏临时记录 ${hiddenRows} 条 · 最新运行 ${latest.run_id || "--"}`;
 
-      renderHistoryChart(history);
+      renderHistoryChart(state.history);
       renderAllocationChart(latest);
       renderDriftChart(latest);
-      renderProfitChart(assets);
+      renderProfitChart(latestAssets);
       renderRiskList(latest);
-      renderAssetRows(sortedAssets);
+      renderRecordList();
+      renderDetailCard();
+      renderAssetRows(latestAssets);
 
-      const hiddenRows = Math.max(number(data.total_history_rows) - number(data.visible_history_rows), 0);
-      setStatus(`正式视图：${latest.timestamp || data.generated_at || "--"}，资产 ${assets.length} 项，已隐藏临时记录 ${hiddenRows} 条`);
+      const modeText = state.view === "official" ? "正式记录视图" : "全部记录视图";
+      setStatus(`${modeText} · 最新时间 ${latest.timestamp || state.raw.generated_at || "--"} · 资产 ${latestAssets.length} 项`);
+    }
+
+    function renderRecordList() {
+      const container = document.getElementById("recordList");
+      const rows = state.history.slice(0, 8);
+      container.innerHTML = rows.map((row) => {
+        const profit = number(row.daily_profit);
+        const active = row.run_id === state.selectedRunId;
+        return `
+          <button class="record-item${active ? " active" : ""}" type="button" data-run-id="${escapeHtml(row.run_id || "")}">
+            <div class="record-top">
+              <strong>${escapeHtml(shortTime(row.timestamp || row.date))}</strong>
+              <span class="record-profit ${profit >= 0 ? "positive" : "negative"}">${money(profit)}</span>
+            </div>
+            <div class="record-meta">${escapeHtml(row.session || row.record_type || "记录")} · ${money(row.total_value)}</div>
+          </button>
+        `;
+      }).join("");
+
+      container.querySelectorAll("[data-run-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.selectedRunId = button.dataset.runId;
+          renderRecordList();
+          renderDetailCard();
+        });
+      });
+    }
+
+    function renderDetailCard() {
+      const detail = currentRecordDetail();
+      const container = document.getElementById("detailCard");
+      if (!detail.record) {
+        container.innerHTML = `<div class="empty">当前没有可展示的记录详情。</div>`;
+        return;
+      }
+
+      const record = detail.record;
+      const profit = number(record.daily_profit);
+      const bucketRows = bucketKeys().map((key) => {
+        const status = record[`${key}_status`] || "OK";
+        const diff = number(record[`${key}_diff`]) * 100;
+        return `
+          <div class="bucket-row">
+            <div>
+              <div class="bucket-name">${escapeHtml(bucketLabels[key])}</div>
+              <div class="bucket-extra">${money(record[`${key}_value`])} · 偏离 ${signed(diff)}%</div>
+            </div>
+            <span class="badge${status === "OK" ? "" : " warn"}">${escapeHtml(statusLabel(status))}</span>
+          </div>
+        `;
+      }).join("");
+
+      const assetRows = detail.assets.length
+        ? detail.assets.slice(0, 8).map((asset) => {
+            const assetProfit = number(asset.daily_profit);
+            return `
+              <div class="asset-row">
+                <div>
+                  <div class="asset-name">${escapeHtml(asset.asset_name || "--")}</div>
+                  <div class="asset-extra">${escapeHtml(asset.bucket_label || asset.bucket || "--")} · ${escapeHtml(formatHoldingValue(asset))}</div>
+                </div>
+                <div class="detail-profit ${assetProfit >= 0 ? "positive" : "negative"}">${money(assetProfit)}</div>
+              </div>
+            `;
+          }).join("")
+        : `<div class="empty">这条记录里没有拿到资产明细。</div>`;
+
+      const signalRows = detail.alerts.length
+        ? detail.alerts.map((text) => `<div class="signal-row"><div>${escapeHtml(text)}</div></div>`).join("")
+        : `<div class="empty">当前没有额外动作提醒。</div>`;
+
+      container.innerHTML = `
+        <div class="detail-card">
+          <div class="detail-row">
+            <div class="detail-main">
+              <strong>${escapeHtml(record.session || record.record_type || "记录")}</strong>
+              <div class="detail-meta">${escapeHtml(record.run_id || "--")} · ${escapeHtml(record.timestamp || record.date || "--")}</div>
+            </div>
+            <div class="detail-profit ${profit >= 0 ? "positive" : "negative"}">${money(profit)}</div>
+          </div>
+
+          <div class="detail-summary">
+            <div class="detail-box">
+              <div class="muted">总资产</div>
+              <strong>${money(record.total_value)}</strong>
+            </div>
+            <div class="detail-box">
+              <div class="muted">涨跌幅</div>
+              <strong>${signed(number(record.daily_change_pct))}%</strong>
+            </div>
+            <div class="detail-box">
+              <div class="muted">记录类型</div>
+              <strong>${record.is_official_report ? "正式" : "临时"}</strong>
+            </div>
+          </div>
+
+          <div class="bucket-list">${bucketRows}</div>
+          <div class="asset-list">${assetRows}</div>
+          <div class="signal-list">${signalRows}</div>
+        </div>
+      `;
+    }
+
+    function renderHistoryChart(history) {
+      const series = state.view === "official" ? buildDailyRecords(history, 7).reverse() : history.slice(0, 14).reverse();
+      const labels = series.map((row) => shortTime(row.timestamp || row.date));
+      const aum = series.map((row) => number(row.total_value));
+      const profit = series.map((row) => number(row.daily_profit));
+
+      replaceChart("historyChart", {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "AUM",
+              data: aum,
+              borderColor: "#0b5bd3",
+              backgroundColor: "rgba(11, 91, 211, 0.08)",
+              fill: true,
+              yAxisID: "y",
+              tension: 0.32,
+              pointRadius: 2,
+            },
+            {
+              label: "Daily P/L",
+              data: profit,
+              type: "bar",
+              backgroundColor: profit.map((value) =>
+                value >= 0 ? "rgba(15, 138, 71, 0.38)" : "rgba(197, 58, 58, 0.38)"
+              ),
+              yAxisID: "y1",
+            },
+          ],
+        },
+        options: chartOptions({
+          y: { ticks: { callback: compactMoney } },
+          y1: {
+            position: "right",
+            grid: { drawOnChartArea: false },
+            ticks: { callback: compactMoney },
+          },
+        }),
+      });
+    }
+
+    function renderAllocationChart(record) {
+      const values = bucketKeys().map((key) => number(record[`${key}_weight`]) * 100);
+      replaceChart("allocationChart", {
+        type: "doughnut",
+        data: {
+          labels: bucketKeys().map((key) => bucketLabels[key]),
+          datasets: [{ data: values, backgroundColor: bucketColors, borderWidth: 0 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.label}: ${number(ctx.raw).toFixed(1)}%`,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function renderDriftChart(record) {
+      const drifts = bucketKeys().map((key) => number(record[`${key}_diff`]) * 100);
+      replaceChart("driftChart", {
+        type: "bar",
+        data: {
+          labels: bucketKeys().map((key) => bucketLabels[key]),
+          datasets: [{
+            label: "偏离",
+            data: drifts,
+            borderRadius: 8,
+            backgroundColor: drifts.map((value) =>
+              value >= 0 ? "rgba(197, 58, 58, 0.66)" : "rgba(15, 138, 71, 0.66)"
+            ),
+          }],
+        },
+        options: chartOptions({
+          y: { ticks: { callback: (value) => `${value}%` } },
+        }),
+      });
+    }
+
+    function renderProfitChart(assets) {
+      const ranked = assets
+        .slice()
+        .sort((a, b) => Math.abs(number(b.daily_profit)) - Math.abs(number(a.daily_profit)))
+        .slice(0, 12)
+        .reverse();
+      const values = ranked.map((item) => number(item.daily_profit));
+      replaceChart("profitChart", {
+        type: "bar",
+        data: {
+          labels: ranked.map((item) => item.asset_name || "--"),
+          datasets: [{
+            label: "日盈亏",
+            data: values,
+            borderRadius: 8,
+            backgroundColor: values.map((value) =>
+              value >= 0 ? "rgba(15, 138, 71, 0.66)" : "rgba(197, 58, 58, 0.66)"
+            ),
+          }],
+        },
+        options: chartOptions({
+          x: { ticks: { callback: compactMoney } },
+        }, true),
+      });
+    }
+
+    function renderRiskList(record) {
+      const list = document.getElementById("riskList");
+      list.innerHTML = bucketKeys().map((key) => {
+        const status = record[`${key}_status`] || "OK";
+        const diff = number(record[`${key}_diff`]) * 100;
+        return `
+          <div class="bucket-row">
+            <div>
+              <div class="bucket-name">${escapeHtml(bucketLabels[key])}</div>
+              <div class="bucket-extra">${money(record[`${key}_value`])} · 偏离 ${signed(diff)}%</div>
+            </div>
+            <span class="badge${status === "OK" ? "" : " warn"}">${escapeHtml(statusLabel(status))}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderAssetRows(assets) {
+      const rows = document.getElementById("assetRows");
+      rows.innerHTML = assets.map((asset) => {
+        const profit = number(asset.daily_profit);
+        const pct = number(asset.daily_change_pct);
+        return `
+          <tr>
+            <td>${escapeHtml(asset.asset_name || "--")}</td>
+            <td>${escapeHtml(asset.bucket_label || asset.bucket || "--")}</td>
+            <td>${escapeHtml((asset.currency || "CNY").toUpperCase())}</td>
+            <td>${formatNumber(asset.quantity)}</td>
+            <td>${formatPlainHolding(asset)}</td>
+            <td>${money(asset.cny_value)}</td>
+            <td class="${profit >= 0 ? "positive" : "negative"}">${money(profit)}</td>
+            <td class="${pct >= 0 ? "positive" : "negative"}">${signed(pct)}%</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function currentRecordDetail() {
+      const record = state.history.find((row) => String(row.run_id) === String(state.selectedRunId)) || state.history[0] || null;
+      if (!record) return { record: null, assets: [], alerts: [] };
+      const assets = assetsForRun(record.run_id);
+      const alerts = parseJsonArray(record.striking_alerts_json);
+      return { record, assets, alerts };
+    }
+
+    function assetsForRun(runId) {
+      const record = state.history.find((row) => String(row.run_id) === String(runId));
+      const embedded = parseJsonArray(record && record.asset_snapshots_json);
+      if (embedded.length) {
+        return embedded.slice().sort((a, b) => number(b.cny_value) - number(a.cny_value));
+      }
+      if (String(state.raw.latest_run_id || "") === String(runId || "")) {
+        return state.assets.slice();
+      }
+      return [];
+    }
+
+    function buildDailyRecords(history, limit) {
+      const rows = [];
+      const seen = new Set();
+      history.forEach((row) => {
+        const key = dayKey(row.timestamp || row.date);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        rows.push(row);
+      });
+      return rows.slice(0, limit);
     }
 
     function normalizeRows(rows) {
@@ -460,129 +1068,29 @@
       });
     }
 
-    function renderHistoryChart(history) {
-      const labels = history.map((row) => shortTime(row.timestamp || row.date));
-      const aum = history.map((row) => number(row.total_value));
-      const profit = history.map((row) => number(row.daily_profit));
-      replaceChart("historyChart", {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "AUM",
-              data: aum,
-              borderColor: "#2359a7",
-              backgroundColor: "rgba(35, 89, 167, 0.08)",
-              yAxisID: "y",
-              tension: 0.28,
-              pointRadius: 2,
-            },
-            {
-              label: "Daily P/L",
-              data: profit,
-              type: "bar",
-              backgroundColor: profit.map((value) => value >= 0 ? "rgba(22, 138, 80, 0.42)" : "rgba(196, 59, 59, 0.42)"),
-              yAxisID: "y1",
-            },
-          ],
-        },
-        options: baseOptions({
-          y: { ticks: { callback: compactMoney } },
-          y1: { position: "right", grid: { drawOnChartArea: false }, ticks: { callback: compactMoney } },
-        }),
-      });
+    function sortHistory(history) {
+      return history.sort((a, b) => historyScore(b) - historyScore(a));
     }
 
-    function renderAllocationChart(latest) {
-      const values = bucketKeys().map((key) => number(latest[`${key}_weight`]) * 100);
-      replaceChart("allocationChart", {
-        type: "doughnut",
-        data: {
-          labels: bucketKeys().map((key) => bucketLabels[key]),
-          datasets: [{ data: values, backgroundColor: bucketColors, borderWidth: 0 }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "bottom" },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw.toFixed(1)}%` } },
-          },
-        },
-      });
+    function historyScore(row) {
+      const timestamp = Date.parse(row.timestamp || row.date || row.Date || "");
+      if (Number.isFinite(timestamp)) return timestamp;
+      const runId = String(row.run_id || "");
+      const numericRunId = Number(runId.replace(/[^0-9]/g, ""));
+      return Number.isFinite(numericRunId) ? numericRunId : 0;
     }
 
-    function renderDriftChart(latest) {
-      const drifts = bucketKeys().map((key) => number(latest[`${key}_diff`]) * 100);
-      replaceChart("driftChart", {
-        type: "bar",
-        data: {
-          labels: bucketKeys().map((key) => bucketLabels[key]),
-          datasets: [{
-            label: "偏离百分比",
-            data: drifts,
-            backgroundColor: drifts.map((value) => value >= 0 ? "rgba(196, 59, 59, 0.65)" : "rgba(22, 138, 80, 0.65)"),
-          }],
+    function chartOptions(scales, horizontal = false) {
+      return {
+        indexAxis: horizontal ? "y" : "x",
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: "index" },
+        plugins: {
+          legend: { position: "bottom" },
         },
-        options: baseOptions({ y: { ticks: { callback: (value) => `${value}%` } } }),
-      });
-    }
-
-    function renderProfitChart(assets) {
-      const ranked = [...assets]
-        .sort((a, b) => Math.abs(number(b.daily_profit)) - Math.abs(number(a.daily_profit)))
-        .slice(0, 12)
-        .reverse();
-      const values = ranked.map((asset) => number(asset.daily_profit));
-      replaceChart("profitChart", {
-        type: "bar",
-        data: {
-          labels: ranked.map((asset) => asset.asset_name),
-          datasets: [{
-            label: "日盈亏",
-            data: values,
-            backgroundColor: values.map((value) => value >= 0 ? "rgba(22, 138, 80, 0.65)" : "rgba(196, 59, 59, 0.65)"),
-          }],
-        },
-        options: baseOptions({ x: { ticks: { callback: compactMoney } } }, true),
-      });
-    }
-
-    function renderRiskList(latest) {
-      const list = document.getElementById("riskList");
-      list.innerHTML = "";
-      bucketKeys().forEach((key) => {
-        const status = latest[`${key}_status`] || "--";
-        const diff = number(latest[`${key}_diff`]) * 100;
-        const value = number(latest[`${key}_value`]);
-        const item = document.createElement("li");
-        item.innerHTML = `
-          <span><strong>${bucketLabels[key]}</strong> <span class="status">${money(value)} / 偏离 ${diff.toFixed(1)}%</span></span>
-          <span class="badge">${statusLabel(status)}</span>
-        `;
-        list.appendChild(item);
-      });
-    }
-
-    function renderAssetRows(assets) {
-      const rows = document.getElementById("assetRows");
-      rows.innerHTML = assets.map((asset) => {
-        const profit = number(asset.daily_profit);
-        const pct = number(asset.daily_change_pct);
-        return `
-          <tr>
-            <td>${escapeHtml(asset.asset_name || "--")}</td>
-            <td>${escapeHtml(asset.bucket_label || asset.bucket || "--")}</td>
-            <td>${escapeHtml(asset.currency || "--")}</td>
-            <td>${formatNumber(asset.quantity)}</td>
-            <td>${formatNumber(asset.local_value)}</td>
-            <td>${money(asset.cny_value)}</td>
-            <td class="${profit >= 0 ? "positive" : "negative"}">${money(profit)}</td>
-            <td class="${pct >= 0 ? "positive" : "negative"}">${pct.toFixed(2)}%</td>
-          </tr>
-        `;
-      }).join("");
+        scales: scales || {},
+      };
     }
 
     function replaceChart(id, config) {
@@ -590,26 +1098,16 @@
       charts[id] = new Chart(document.getElementById(id), config);
     }
 
-    function baseOptions(scales, horizontal = false) {
-      return {
-        indexAxis: horizontal ? "y" : "x",
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true, position: "bottom" },
-          tooltip: { intersect: false, mode: "index" },
-        },
-        scales: scales || {},
-      };
-    }
-
     function bucketKeys() {
       return ["beta_core", "alpha_satellite", "defense", "liquidity"];
     }
 
-    function riskSummary(latest) {
-      const bad = bucketKeys().filter((key) => latest[`${key}_status`] && latest[`${key}_status`] !== "OK");
-      if (bad.length === 0) {
+    function riskSummary(record) {
+      const bad = bucketKeys().filter((key) => {
+        const status = record[`${key}_status`];
+        return status && status !== "OK";
+      });
+      if (!bad.length) {
         return { title: "Balanced", subtitle: "资产桶均在容忍区间内" };
       }
       return { title: "Needs Action", subtitle: bad.map((key) => bucketLabels[key]).join("、") };
@@ -630,6 +1128,35 @@
       element.classList.toggle("negative", numeric < 0);
     }
 
+    function clearSurface() {
+      ["aum", "runTime", "dailyProfit", "dailyPct", "largestAsset", "largestAssetValue", "riskFlag", "riskSub"]
+        .forEach((id) => {
+          const node = document.getElementById(id);
+          if (node) node.textContent = "--";
+        });
+      document.getElementById("recordList").innerHTML = "";
+      document.getElementById("detailCard").innerHTML = `<div class="empty">暂无可展示数据。</div>`;
+      document.getElementById("riskList").innerHTML = `<div class="empty">暂无仓位提醒。</div>`;
+      document.getElementById("assetRows").innerHTML = "";
+      document.getElementById("recordCount").textContent = "--";
+      document.getElementById("historyNote").textContent = "最近记录";
+      document.getElementById("footerNote").textContent = "数据来源：Cloudflare Worker / Google Sheets";
+      Object.keys(charts).forEach((key) => {
+        charts[key].destroy();
+        delete charts[key];
+      });
+    }
+
+    function parseJsonArray(text) {
+      if (!text) return [];
+      try {
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
     function money(value) {
       return `¥${number(value).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
     }
@@ -638,6 +1165,17 @@
       const numeric = number(value);
       if (Math.abs(numeric) >= 10000) return `¥${(numeric / 10000).toFixed(1)}万`;
       return `¥${numeric.toFixed(0)}`;
+    }
+
+    function formatHoldingValue(asset) {
+      if (!asset) return "--";
+      const currency = String(asset.currency || "CNY").toUpperCase();
+      return `${currency} ${formatNumber(asset.local_value)}（¥${formatNumber(asset.cny_value)}）`;
+    }
+
+    function formatPlainHolding(asset) {
+      const currency = String(asset.currency || "CNY").toUpperCase();
+      return `${currency} ${formatNumber(asset.local_value)}`;
     }
 
     function formatNumber(value) {
@@ -649,11 +1187,27 @@
       return Number.isFinite(numeric) ? numeric : 0;
     }
 
+    function signed(value) {
+      const numeric = number(value);
+      return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}`;
+    }
+
     function shortTime(value) {
       if (!value) return "--";
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return String(value).slice(5, 16);
-      return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+      return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function dayKey(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+
+    function pad(value) {
+      return String(value).padStart(2, "0");
     }
 
     function escapeHtml(value) {
