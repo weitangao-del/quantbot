@@ -23,16 +23,29 @@ REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Shanghai")
 GITHUB_EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "").strip()
 GITHUB_EVENT_SCHEDULE = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
 
+SCHEDULE_ATTEMPT_MINUTES = ("7", "17", "27", "37", "47")
 SCHEDULE_SLOTS = {
-    "23 1 * * *": ("official_0900", True),
-    "43 1 * * *": ("official_0900", True),
-    "23 7 * * *": ("ad_hoc_1500", False),
-    "43 7 * * *": ("ad_hoc_1500", False),
-    "23 13 * * *": ("ad_hoc_2100", False),
-    "43 13 * * *": ("ad_hoc_2100", False),
-    "23 19 * * *": ("ad_hoc_0300", False),
-    "43 19 * * *": ("ad_hoc_0300", False),
+    f"{minute} 1 * * *": ("official_0900", True)
+    for minute in SCHEDULE_ATTEMPT_MINUTES
 }
+SCHEDULE_SLOTS.update(
+    {
+        f"{minute} 7 * * *": ("ad_hoc_1500", False)
+        for minute in SCHEDULE_ATTEMPT_MINUTES
+    }
+)
+SCHEDULE_SLOTS.update(
+    {
+        f"{minute} 13 * * *": ("ad_hoc_2100", False)
+        for minute in SCHEDULE_ATTEMPT_MINUTES
+    }
+)
+SCHEDULE_SLOTS.update(
+    {
+        f"{minute} 19 * * *": ("ad_hoc_0300", False)
+        for minute in SCHEDULE_ATTEMPT_MINUTES
+    }
+)
 
 # 顶层资产桶：不要再按市场分，而是按这笔资产在组合里的职责分。
 PORTFOLIO_BUCKETS = {
