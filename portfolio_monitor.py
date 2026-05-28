@@ -23,29 +23,12 @@ REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Shanghai")
 GITHUB_EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "").strip()
 GITHUB_EVENT_SCHEDULE = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
 
-SCHEDULE_ATTEMPT_MINUTES = ("7", "17", "27", "37", "47")
-SCHEDULE_SLOTS = {
-    f"{minute} 1 * * *": ("official_0900", True)
-    for minute in SCHEDULE_ATTEMPT_MINUTES
-}
-SCHEDULE_SLOTS.update(
-    {
-        f"{minute} 7 * * *": ("ad_hoc_1500", False)
-        for minute in SCHEDULE_ATTEMPT_MINUTES
-    }
-)
-SCHEDULE_SLOTS.update(
-    {
-        f"{minute} 13 * * *": ("ad_hoc_2100", False)
-        for minute in SCHEDULE_ATTEMPT_MINUTES
-    }
-)
-SCHEDULE_SLOTS.update(
-    {
-        f"{minute} 19 * * *": ("ad_hoc_0300", False)
-        for minute in SCHEDULE_ATTEMPT_MINUTES
-    }
-)
+SCHEDULE_WINDOWS = [
+    {"slot": "ad_hoc_0300", "hour": 3, "official": False, "session": "盘中市场汇报"},
+    {"slot": "official_0900", "hour": 9, "official": True, "session": "早盘市场汇报"},
+    {"slot": "ad_hoc_1500", "hour": 15, "official": False, "session": "晚盘市场汇报"},
+    {"slot": "ad_hoc_2100", "hour": 21, "official": False, "session": "盘中市场汇报"},
+]
 
 # 顶层资产桶：不要再按市场分，而是按这笔资产在组合里的职责分。
 PORTFOLIO_BUCKETS = {
@@ -120,7 +103,11 @@ def local_now():
     return datetime.now(ZoneInfo(REPORT_TIMEZONE))
 
 
-def get_report_session(now):
+def get_report_session(now, run_slot=None):
+    if run_slot:
+        for window in SCHEDULE_WINDOWS:
+            if window["slot"] == run_slot:
+                return window["session"]
     if 5 <= now.hour < 12:
         return "早盘市场汇报"
     if 12 <= now.hour < 19:
@@ -128,29 +115,27 @@ def get_report_session(now):
     return "盘中市场汇报"
 
 
+def get_due_schedule_window(now):
+    due_windows = [window for window in SCHEDULE_WINDOWS if now.hour >= window["hour"]]
+    return due_windows[-1] if due_windows else None
+
+
 def get_schedule_slot(now):
-    if GITHUB_EVENT_NAME == "schedule":
-        slot = SCHEDULE_SLOTS.get(GITHUB_EVENT_SCHEDULE)
-        if slot:
-            return slot[0]
-        return f"scheduled_{now.strftime('%H%M')}"
-    return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
+    if GITHUB_EVENT_NAME != "schedule":
+        return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
+    window = get_due_schedule_window(now)
+    return window["slot"] if window else ""
 
 
 def is_official_report_run(now):
-    forced = os.getenv("FORCE_OFFICIAL_REPORT", "").strip().lower()
-    if forced in {"1", "true", "yes"}:
-        return True
-    if forced in {"0", "false", "no"}:
-        return False
     if GITHUB_EVENT_NAME != "schedule":
         return False
-    slot = SCHEDULE_SLOTS.get(GITHUB_EVENT_SCHEDULE)
-    return bool(slot and slot[1])
+    window = get_due_schedule_window(now)
+    return bool(window and window["official"])
 
 
 def scheduled_record_already_exists(report_time, run_slot, is_official_report):
-    if GITHUB_EVENT_NAME != "schedule":
+    if GITHUB_EVENT_NAME != "schedule" or not run_slot:
         return False
 
     webhook_url = os.getenv("HISTORY_WEBAPP_URL")
@@ -485,8 +470,11 @@ def get_ai_summary(report_text, dev_text, alerts_text):
 # ==========================================
 def get_portfolio_status():
     report_time = local_now()
-    report_session = get_report_session(report_time)
     run_slot = get_schedule_slot(report_time)
+    if GITHUB_EVENT_NAME == "schedule" and not run_slot:
+        print(f"ℹ️ 当前时间 {report_time.strftime('%H:%M')} 不在 03/09/15/21 记录窗口，跳过。")
+        return
+    report_session = get_report_session(report_time, run_slot if GITHUB_EVENT_NAME == "schedule" else None)
     is_official_report = is_official_report_run(report_time)
     if scheduled_record_already_exists(report_time, run_slot, is_official_report):
         return
