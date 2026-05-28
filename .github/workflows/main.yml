@@ -3,11 +3,32 @@ name: Portfolio Monitor
 on:
   workflow_dispatch:
   schedule:
-    # Beijing time 09:23 / 15:23 / 21:23 / 03:23.
-    - cron: "23 1 * * *"
-    - cron: "23 7 * * *"
-    - cron: "23 13 * * *"
-    - cron: "23 19 * * *"
+    # GitHub Actions cron uses UTC. Run several attempts in each Beijing
+    # 6-hour window; portfolio_monitor.py dedupes after the first good record.
+    # Beijing 09:07/09:17/09:27/09:37/09:47, official daily record.
+    - cron: "7 1 * * *"
+    - cron: "17 1 * * *"
+    - cron: "27 1 * * *"
+    - cron: "37 1 * * *"
+    - cron: "47 1 * * *"
+    # Beijing 15:07/15:17/15:27/15:37/15:47, ad-hoc record.
+    - cron: "7 7 * * *"
+    - cron: "17 7 * * *"
+    - cron: "27 7 * * *"
+    - cron: "37 7 * * *"
+    - cron: "47 7 * * *"
+    # Beijing 21:07/21:17/21:27/21:37/21:47, ad-hoc record.
+    - cron: "7 13 * * *"
+    - cron: "17 13 * * *"
+    - cron: "27 13 * * *"
+    - cron: "37 13 * * *"
+    - cron: "47 13 * * *"
+    # Beijing 03:07/03:17/03:27/03:37/03:47, ad-hoc record.
+    - cron: "7 19 * * *"
+    - cron: "17 19 * * *"
+    - cron: "27 19 * * *"
+    - cron: "37 19 * * *"
+    - cron: "47 19 * * *"
 
 jobs:
   run-monitor:
