@@ -1,0 +1,14 @@
+name = "quantbot-dashboard-api"
+main = "src/index.js"
+compatibility_date = "2026-05-27"
+
+[vars]
+DEFAULT_VIEW = "official"
+DEFAULT_LIMIT = "120"
+GITHUB_OWNER = "weitangao-del"
+GITHUB_REPO = "quantbot"
+GITHUB_WORKFLOW_FILE = "main.yml"
+GITHUB_WORKFLOW_REF = "main"
+
+[triggers]
+crons = ["0 16 * * *", "0 22 * * *", "0 4 * * *", "0 10 * * *"]

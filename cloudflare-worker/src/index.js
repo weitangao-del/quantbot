@@ -5,6 +5,25 @@ const JSON_HEADERS = {
   "access-control-allow-headers": "content-type"
 };
 
+const SCHEDULED_RUNS = {
+  "0 16 * * *": {
+    slot: "ad_hoc_0000",
+    label: "Beijing 00:00"
+  },
+  "0 22 * * *": {
+    slot: "ad_hoc_0600",
+    label: "Beijing 06:00"
+  },
+  "0 4 * * *": {
+    slot: "ad_hoc_1200",
+    label: "Beijing 12:00"
+  },
+  "0 10 * * *": {
+    slot: "official_1800",
+    label: "Beijing 18:00"
+  }
+};
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") {
@@ -36,8 +55,8 @@ export default {
     }
 
     const upstream = new URL(sourceUrl);
-    upstream.searchParams.set("view", view);
-    upstream.searchParams.set("limit", String(limit));
+    upstream.searchParams.set("view", "all");
+    upstream.searchParams.set("limit", String(Math.max(limit, 240)));
 
     const upstreamResponse = await fetch(upstream.toString(), {
       headers: { "accept": "application/json" },
@@ -63,7 +82,7 @@ export default {
       }, 502);
     }
 
-    const normalized = normalizeDashboardPayload(payload, view);
+    const normalized = normalizeDashboardPayload(payload, view, limit);
     const response = jsonResponse(normalized, 200, {
       "cache-control": "public, max-age=45"
     });
@@ -71,27 +90,45 @@ export default {
       ctx.waitUntil(cache.put(cacheKey, response.clone()));
     }
     return response;
+  },
+
+  async scheduled(controller, env, ctx) {
+    const scheduledRun = SCHEDULED_RUNS[controller.cron];
+    if (!scheduledRun) {
+      console.log(`No quantbot mapping for cron ${controller.cron}`);
+      return;
+    }
+
+    ctx.waitUntil(triggerMonitorRun(scheduledRun, controller.cron, env));
   }
 };
 
-function normalizeDashboardPayload(payload, view) {
-  const history = Array.isArray(payload.history)
+function normalizeDashboardPayload(payload, view, limit) {
+  const allHistory = Array.isArray(payload.history)
     ? payload.history.map(normalizeRow).sort(compareHistoryDesc)
     : [];
-  let assets = Array.isArray(payload.assets)
-    ? payload.assets.map(normalizeRow).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0))
-    : [];
-  if (assets.length === 0 && history.length) {
-    assets = parseEmbeddedAssets(history[0]).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
+  const filteredAllHistory = view === "official"
+    ? allHistory.filter(isOfficialHistoryRow)
+    : allHistory;
+  const filteredHistory = filteredAllHistory.slice(0, limit);
+
+  let assets = [];
+  if (filteredHistory.length) {
+    assets = parseEmbeddedAssets(filteredHistory[0]).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
+  }
+  if (assets.length === 0 && Array.isArray(payload.assets) && view === "all") {
+    assets = payload.assets
+      .map(normalizeRow)
+      .sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
   }
   return {
     status: "Success",
-    view: payload.view || view,
-    total_history_rows: toNumber(payload.total_history_rows, history.length),
-    visible_history_rows: toNumber(payload.visible_history_rows, history.length),
-    latest_run_id: payload.latest_run_id || (history.length ? history[0].run_id : ""),
+    view,
+    total_history_rows: allHistory.length,
+    visible_history_rows: filteredAllHistory.length,
+    latest_run_id: filteredHistory.length ? filteredHistory[0].run_id : "",
     generated_at: payload.generated_at || new Date().toISOString(),
-    history,
+    history: filteredHistory,
     assets
   };
 }
@@ -167,6 +204,29 @@ function safeView(value) {
   return value === "all" ? "all" : "official";
 }
 
+function isOfficialHistoryRow(row) {
+  if (row.is_official_report === true) {
+    return true;
+  }
+  if (row.schedule_slot === "official_1800" || row.schedule_slot === "official_0900") {
+    return true;
+  }
+  if (String(row.record_type || "").toLowerCase() === "official") {
+    return true;
+  }
+  if (row.is_official_report !== null && row.is_official_report !== undefined) {
+    return false;
+  }
+  if (row.session === "晚盘正式结算") {
+    return true;
+  }
+  if (row.session === "早盘市场汇报") {
+    return true;
+  }
+  const hour = historyHour(row);
+  return hour === 18 || hour === 9;
+}
+
 function safeLimit(value) {
   const limit = Number(value);
   if (!Number.isFinite(limit)) {
@@ -188,4 +248,51 @@ function jsonResponse(body, status = 200, headers = {}) {
       ...headers
     }
   });
+}
+
+function historyHour(row) {
+  const parsed = Date.parse(row.timestamp || row.date || "");
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return (new Date(parsed).getUTCHours() + 8) % 24;
+}
+
+async function triggerMonitorRun(run, cron, env) {
+  const token = env.GITHUB_WORKFLOW_TOKEN;
+  const owner = env.GITHUB_OWNER;
+  const repo = env.GITHUB_REPO;
+  const workflowFile = env.GITHUB_WORKFLOW_FILE || "main.yml";
+  const ref = env.GITHUB_WORKFLOW_REF || "main";
+
+  if (!token || !owner || !repo) {
+    throw new Error("Missing GitHub workflow dispatch configuration in Cloudflare Worker");
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${token}`,
+        "content-type": "application/json",
+        "user-agent": "quantbot-dashboard-api"
+      },
+      body: JSON.stringify({
+        ref,
+        inputs: {
+          run_slot: run.slot,
+          trigger_source: `cloudflare:${run.label}:${cron}`
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`GitHub dispatch failed (${response.status}): ${errorText}`);
+  }
+
+  console.log(`Triggered ${repo} workflow for ${run.slot} via ${cron}`);
 }

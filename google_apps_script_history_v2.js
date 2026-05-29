@@ -113,6 +113,9 @@ function isOfficialHistoryRow_(row) {
   if (row.is_official_report === true || row.is_official_report === "TRUE" || row.is_official_report === "true") {
     return true;
   }
+  if (row.schedule_slot === "official_1800") {
+    return true;
+  }
   if (row.schedule_slot === "official_0900") {
     return true;
   }
@@ -122,11 +125,11 @@ function isOfficialHistoryRow_(row) {
   if (row.is_official_report !== "" && row.is_official_report !== undefined && row.is_official_report !== null) {
     return false;
   }
-  if (row.session !== "早盘市场汇报") {
+  if (row.session !== "早盘市场汇报" && row.session !== "晚盘正式结算") {
     return false;
   }
   const hour = historyHour_(row);
-  return hour === null || (hour >= 5 && hour < 12);
+  return hour === null || (hour === 18 || (hour >= 5 && hour < 12));
 }
 
 function compareHistoryDesc_(a, b) {

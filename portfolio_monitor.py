@@ -22,13 +22,16 @@ CSV_URL = os.getenv("PORTFOLIO_CSV_URL")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Shanghai")
 GITHUB_EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "").strip()
 GITHUB_EVENT_SCHEDULE = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
+RUN_SLOT_OVERRIDE = os.getenv("RUN_SLOT_OVERRIDE", "").strip()
+TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "").strip()
 
 SCHEDULE_WINDOWS = [
-    {"slot": "ad_hoc_0300", "hour": 3, "official": False, "session": "盘中市场汇报"},
-    {"slot": "official_0900", "hour": 9, "official": True, "session": "早盘市场汇报"},
-    {"slot": "ad_hoc_1500", "hour": 15, "official": False, "session": "晚盘市场汇报"},
-    {"slot": "ad_hoc_2100", "hour": 21, "official": False, "session": "盘中市场汇报"},
+    {"slot": "ad_hoc_0000", "hour": 0, "official": False, "session": "午夜资产快照", "cron": "0 16 * * *"},
+    {"slot": "ad_hoc_0600", "hour": 6, "official": False, "session": "早盘资产快照", "cron": "0 22 * * *"},
+    {"slot": "ad_hoc_1200", "hour": 12, "official": False, "session": "午间资产快照", "cron": "0 4 * * *"},
+    {"slot": "official_1800", "hour": 18, "official": True, "session": "晚盘正式结算", "cron": "0 10 * * *"},
 ]
+SCHEDULE_WINDOW_BY_SLOT = {window["slot"]: window for window in SCHEDULE_WINDOWS}
 
 # 顶层资产桶：不要再按市场分，而是按这笔资产在组合里的职责分。
 PORTFOLIO_BUCKETS = {
@@ -103,11 +106,19 @@ def local_now():
     return datetime.now(ZoneInfo(REPORT_TIMEZONE))
 
 
+def get_window_by_slot(run_slot):
+    return SCHEDULE_WINDOW_BY_SLOT.get(run_slot)
+
+
+def is_automated_slot_run(run_slot):
+    return bool(run_slot and (GITHUB_EVENT_NAME == "schedule" or RUN_SLOT_OVERRIDE))
+
+
 def get_report_session(now, run_slot=None):
     if run_slot:
-        for window in SCHEDULE_WINDOWS:
-            if window["slot"] == run_slot:
-                return window["session"]
+        window = get_window_by_slot(run_slot)
+        if window:
+            return window["session"]
     if 5 <= now.hour < 12:
         return "早盘市场汇报"
     if 12 <= now.hour < 19:
@@ -121,6 +132,8 @@ def get_due_schedule_window(now):
 
 
 def get_schedule_slot(now):
+    if RUN_SLOT_OVERRIDE:
+        return RUN_SLOT_OVERRIDE
     if GITHUB_EVENT_NAME != "schedule":
         return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
     window = get_due_schedule_window(now)
@@ -128,6 +141,9 @@ def get_schedule_slot(now):
 
 
 def is_official_report_run(now):
+    if RUN_SLOT_OVERRIDE:
+        window = get_window_by_slot(RUN_SLOT_OVERRIDE)
+        return bool(window and window["official"])
     if GITHUB_EVENT_NAME != "schedule":
         return False
     window = get_due_schedule_window(now)
@@ -135,7 +151,7 @@ def is_official_report_run(now):
 
 
 def scheduled_record_already_exists(report_time, run_slot, is_official_report):
-    if GITHUB_EVENT_NAME != "schedule" or not run_slot:
+    if not is_automated_slot_run(run_slot):
         return False
 
     webhook_url = os.getenv("HISTORY_WEBAPP_URL")
@@ -168,6 +184,10 @@ def scheduled_record_already_exists(report_time, run_slot, is_official_report):
 
 def legacy_row_matches_slot(row, run_slot):
     expected_hours = {
+        "ad_hoc_0000": 0,
+        "ad_hoc_0600": 6,
+        "ad_hoc_1200": 12,
+        "official_1800": 18,
         "official_0900": 9,
         "ad_hoc_1500": 15,
         "ad_hoc_2100": 21,
@@ -177,6 +197,15 @@ def legacy_row_matches_slot(row, run_slot):
     if expected_hour is None:
         return False
     return extract_row_hour(row) == expected_hour
+
+
+def get_schedule_cron(run_slot):
+    if GITHUB_EVENT_SCHEDULE:
+        return GITHUB_EVENT_SCHEDULE
+    window = get_window_by_slot(run_slot)
+    if window:
+        return window.get("cron", "")
+    return ""
 
 
 def extract_row_hour(row):
@@ -347,7 +376,7 @@ def sync_to_cloud_history(
         "timestamp": report_time.isoformat(timespec="seconds"),
         "run_id": report_time.strftime("%Y%m%d-%H%M%S"),
         "schedule_slot": run_slot,
-        "schedule_cron": GITHUB_EVENT_SCHEDULE,
+        "schedule_cron": get_schedule_cron(run_slot),
         "github_event_name": GITHUB_EVENT_NAME,
         "append_mode": "portfolio_snapshot_v2",
         "session": report_session,
@@ -472,9 +501,10 @@ def get_portfolio_status():
     report_time = local_now()
     run_slot = get_schedule_slot(report_time)
     if GITHUB_EVENT_NAME == "schedule" and not run_slot:
-        print(f"ℹ️ 当前时间 {report_time.strftime('%H:%M')} 不在 03/09/15/21 记录窗口，跳过。")
+        print(f"ℹ️ 当前时间 {report_time.strftime('%H:%M')} 不在 00/06/12/18 记录窗口，跳过。")
         return
-    report_session = get_report_session(report_time, run_slot if GITHUB_EVENT_NAME == "schedule" else None)
+    automated_slot = run_slot if is_automated_slot_run(run_slot) else None
+    report_session = get_report_session(report_time, automated_slot)
     is_official_report = is_official_report_run(report_time)
     if scheduled_record_already_exists(report_time, run_slot, is_official_report):
         return
@@ -727,6 +757,8 @@ def get_portfolio_status():
         f"🕒 {report_time.strftime('%Y-%m-%d %H:%M')} {REPORT_TIMEZONE} | 运行于 GitHub Actions",
         "========================================",
     ]
+    if TRIGGER_SOURCE:
+        report_lines.insert(1, f"🧭 触发来源: {TRIGGER_SOURCE}")
     report_lines.append("🌐 <b>全球宏观风向标</b>")
     report_lines.extend(macro_results)
     report_lines.append("----------------------------------------")

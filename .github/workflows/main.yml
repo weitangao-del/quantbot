@@ -2,10 +2,15 @@ name: Portfolio Monitor
 
 on:
   workflow_dispatch:
-  schedule:
-    # Poll twice an hour. The Python program decides whether a 03/09/15/21
-    # slot is due and skips all other runs.
-    - cron: "7,37 * * * *"
+    inputs:
+      run_slot:
+        description: Cloudflare schedule slot override
+        required: false
+        type: string
+      trigger_source:
+        description: Trigger source label
+        required: false
+        type: string
 
 jobs:
   run-monitor:
@@ -39,4 +44,6 @@ jobs:
           REPORT_TIMEZONE: Asia/Shanghai
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          RUN_SLOT_OVERRIDE: ${{ github.event.inputs.run_slot }}
+          TRIGGER_SOURCE: ${{ github.event.inputs.trigger_source }}
         run: python portfolio_monitor.py
