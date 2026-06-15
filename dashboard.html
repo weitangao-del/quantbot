@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TONG-资管 Web</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="./web/data-utils.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -216,6 +217,19 @@
       padding: 16px;
     }
 
+    .aum-panel {
+      cursor: pointer;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    .aum-panel:hover,
+    .aum-panel:focus-visible {
+      border-color: rgba(11, 91, 211, 0.38);
+      box-shadow: 0 20px 52px rgba(20, 50, 77, 0.12);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
     .panel + .panel {
       margin-top: 14px;
     }
@@ -226,6 +240,13 @@
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 12px;
+    }
+
+    .panel-head-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     h2,
@@ -248,6 +269,29 @@
       color: var(--muted);
       font-size: 12px;
       text-align: right;
+    }
+
+    .panel-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: 160ms ease;
+      white-space: nowrap;
+    }
+
+    .panel-link:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
+      box-shadow: 0 8px 18px rgba(20, 50, 77, 0.08);
     }
 
     .chart-box {
@@ -571,9 +615,12 @@
 
     <section class="grid main-grid">
       <div>
-        <article class="panel">
+        <article class="panel aum-panel" id="aumPanel" role="link" tabindex="0" aria-label="打开 AUM 长周期走势">
           <div class="panel-head">
-            <h2>AUM 走势</h2>
+            <div class="panel-head-group">
+              <h2>AUM 走势</h2>
+              <a class="panel-link" id="aumDetailLink" href="./aum.html?view=all&range=30">查看更多</a>
+            </div>
             <div class="panel-note" id="historyNote">最近记录</div>
           </div>
           <div class="chart-box"><canvas id="historyChart"></canvas></div>
@@ -656,7 +703,9 @@
   </div>
 
   <script>
+    const { buildAumSeries, normalizeRows, sortHistory } = window.QuantbotDataUtils;
     const API_URL = "https://quantbot-dashboard-api.weitangao.workers.dev/dashboard";
+    const params = new URLSearchParams(window.location.search);
     const bucketLabels = {
       beta_core: "Beta核心仓",
       alpha_satellite: "Alpha卫星仓",
@@ -666,8 +715,9 @@
     const bucketColors = ["#0b5bd3", "#6d4ccf", "#b27a11", "#0f8a47"];
     const charts = {};
     const state = {
-      view: "all",
+      view: params.get("view") === "official" ? "official" : "all",
       refresh: false,
+      rawHistory: [],
       history: [],
       assets: [],
       raw: null,
@@ -679,16 +729,46 @@
     document.querySelectorAll(".segment").forEach((button) => {
       button.addEventListener("click", () => switchView(button.dataset.view));
     });
+    document.getElementById("aumPanel").addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      openAumDetail();
+    });
+    document.getElementById("aumPanel").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openAumDetail();
+    });
 
+    syncViewControls();
     loadDashboard();
 
     function switchView(view) {
       if (!view || view === state.view) return;
       state.view = view;
-      document.querySelectorAll(".segment").forEach((button) => {
-        button.classList.toggle("active", button.dataset.view === view);
-      });
+      syncViewControls();
       loadDashboard();
+    }
+
+    function syncViewControls() {
+      document.querySelectorAll(".segment").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === state.view);
+      });
+      const next = new URLSearchParams(window.location.search);
+      next.set("view", state.view);
+      history.replaceState({}, "", `./dashboard.html?${next.toString()}`);
+      document.getElementById("aumDetailLink").href = aumDetailUrl();
+      document.getElementById("aumPanel").setAttribute(
+        "aria-label",
+        `打开${state.view === "official" ? "正式记录" : "全部记录"} AUM 长周期走势`
+      );
+    }
+
+    function aumDetailUrl() {
+      return `./aum.html?view=${encodeURIComponent(state.view)}&range=30`;
+    }
+
+    function openAumDetail() {
+      window.location.href = aumDetailUrl();
     }
 
     async function loadDashboard(refresh = false) {
@@ -696,7 +776,8 @@
       hideError();
       try {
         const data = await fetchDashboard(state.view, refresh);
-        const history = sortHistory(normalizeRows(data.history || []));
+        const rawHistory = sortHistory(normalizeRows(data.history || []));
+        const history = buildAumSeries(rawHistory);
         if (!history.length) {
           throw new Error(
             state.view === "official"
@@ -710,6 +791,7 @@
           .sort((a, b) => number(b.cny_value) - number(a.cny_value));
 
         state.raw = data;
+        state.rawHistory = rawHistory;
         state.history = history;
         state.assets = assets;
         if (!state.selectedRunId || !history.some((row) => row.run_id === state.selectedRunId)) {
@@ -747,6 +829,7 @@
       const largest = latestAssets[0] || state.assets[0] || {};
       const risk = riskSummary(latest);
       const hiddenRows = Math.max(number(state.raw.total_history_rows) - number(state.raw.visible_history_rows), 0);
+      const filteredRows = Math.max(state.rawHistory.length - state.history.length, 0);
 
       document.getElementById("aum").textContent = money(latest.total_value);
       document.getElementById("runTime").textContent = `${shortTime(latest.timestamp || latest.date)} · ${latest.session || latest.record_type || "记录"}`;
@@ -758,9 +841,12 @@
       document.getElementById("riskSub").textContent = risk.subtitle;
       document.getElementById("recordCount").textContent = `${state.history.length} 条记录`;
       document.getElementById("historyNote").textContent =
-        state.view === "official" ? "近 7 天正式结算" : "近 120 条全部记录";
+        state.view === "official"
+          ? "近 7 天正式结算"
+          : `近 120 条全部记录${filteredRows ? ` · 已过滤 ${filteredRows} 条异常快照` : ""}`;
+      document.getElementById("aumDetailLink").href = aumDetailUrl();
       document.getElementById("footerNote").textContent =
-        `${state.view === "official" ? "正式记录" : "全部记录"} · 隐藏临时记录 ${hiddenRows} 条 · 最新运行 ${latest.run_id || "--"}`;
+        `${state.view === "official" ? "正式记录" : "全部记录"} · 隐藏临时记录 ${hiddenRows} 条${filteredRows ? ` · 过滤异常快照 ${filteredRows} 条` : ""} · 最新运行 ${latest.run_id || "--"}`;
 
       renderHistoryChart(state.history);
       renderAllocationChart(latest);
@@ -1056,28 +1142,6 @@
         rows.push(row);
       });
       return rows.slice(0, limit);
-    }
-
-    function normalizeRows(rows) {
-      return rows.map((row) => {
-        const normalized = {};
-        Object.keys(row).forEach((key) => {
-          normalized[key] = row[key] === "" ? null : row[key];
-        });
-        return normalized;
-      });
-    }
-
-    function sortHistory(history) {
-      return history.sort((a, b) => historyScore(b) - historyScore(a));
-    }
-
-    function historyScore(row) {
-      const timestamp = Date.parse(row.timestamp || row.date || row.Date || "");
-      if (Number.isFinite(timestamp)) return timestamp;
-      const runId = String(row.run_id || "");
-      const numericRunId = Number(runId.replace(/[^0-9]/g, ""));
-      return Number.isFinite(numericRunId) ? numericRunId : 0;
     }
 
     function chartOptions(scales, horizontal = false) {

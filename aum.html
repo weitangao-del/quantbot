@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AUM 详情 | TONG-资管</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="./web/data-utils.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f8;
+      --panel: rgba(255, 255, 255, 0.94);
+      --panel-strong: #ffffff;
+      --text: #17212b;
+      --muted: #617182;
+      --line: #d9e1ea;
+      --line-strong: #c6d2dd;
+      --primary: #0b5bd3;
+      --primary-soft: rgba(11, 91, 211, 0.08);
+      --green: #0f8a47;
+      --red: #c53a3a;
+      --navy: #14324d;
+      --radius: 10px;
+      --shadow: 0 18px 50px rgba(20, 50, 77, 0.08);
+      --font: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(11, 91, 211, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(15, 138, 71, 0.08), transparent 22%),
+        linear-gradient(180deg, #f7fafc 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    .shell {
+      width: min(1480px, calc(100% - 28px));
+      margin: 20px auto 36px;
+    }
+
+    .topbar,
+    .panel,
+    .metric,
+    .table-wrap {
+      border: 1px solid rgba(198, 210, 221, 0.76);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 18px;
+      padding: 20px 22px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1;
+      font-weight: 760;
+    }
+
+    h2 {
+      font-size: 17px;
+      font-weight: 740;
+    }
+
+    .status {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+      justify-items: end;
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-auto-flow: column;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(239, 244, 250, 0.9);
+    }
+
+    .segment,
+    .action-btn,
+    .range-btn {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+      transition: 160ms ease;
+    }
+
+    .segment,
+    .range-btn {
+      min-width: 96px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .segment.active,
+    .range-btn.active {
+      background: var(--panel-strong);
+      color: var(--navy);
+      border-color: var(--line);
+      box-shadow: 0 6px 14px rgba(20, 50, 77, 0.08);
+    }
+
+    .segment:hover,
+    .action-btn:hover,
+    .range-btn:hover,
+    .back-link:hover {
+      transform: translateY(-1px);
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .action-btn,
+    .back-link {
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-strong);
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .action-btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .metrics {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 14px;
+    }
+
+    .detail-grid {
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+      align-items: start;
+    }
+
+    .metric,
+    .panel {
+      padding: 16px;
+    }
+
+    .metric {
+      min-height: 120px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 12px;
+      font-size: clamp(24px, 3.1vw, 34px);
+      line-height: 1.04;
+      font-weight: 760;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-sub,
+    .panel-note,
+    .muted {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .panel-head-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chart-box {
+      position: relative;
+      height: 360px;
+    }
+
+    .chart-box.tall {
+      height: 420px;
+    }
+
+    .stat-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      align-items: baseline;
+    }
+
+    .stat-row strong {
+      font-size: 15px;
+      font-weight: 740;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      margin-top: 14px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child,
+    th:nth-child(2),
+    td:nth-child(2) {
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fbfe;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .positive {
+      color: var(--green);
+    }
+
+    .negative {
+      color: var(--red);
+    }
+
+    .error {
+      display: none;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(197, 58, 58, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 244, 244, 0.94);
+      color: #982626;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1120px) {
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        width: min(100% - 18px, 100%);
+        margin: 10px auto 24px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+
+      .controls {
+        justify-items: stretch;
+      }
+
+      .segmented {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .segment,
+      .range-btn {
+        min-width: 0;
+      }
+
+      .action-row {
+        justify-content: stretch;
+      }
+
+      .action-btn,
+      .back-link {
+        flex: 1 1 0;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-box,
+      .chart-box.tall {
+        height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="topbar">
+      <div>
+        <p class="eyebrow">TONG CAPITAL CONSOLE</p>
+        <h1 id="pageTitle">正式记录 AUM</h1>
+        <div class="status" id="status">正在读取更长周期的资产记录...</div>
+      </div>
+      <div class="controls">
+        <div class="segmented" role="tablist" aria-label="record view">
+          <button class="segment" data-view="official" type="button">正式记录</button>
+          <button class="segment" data-view="all" type="button">全部记录</button>
+        </div>
+        <div class="action-row">
+          <a class="back-link" id="backLink" href="./dashboard.html?view=official">返回总览</a>
+          <button class="action-btn" id="refreshBtn" type="button">刷新</button>
+          <button class="action-btn primary" id="refreshRealtimeBtn" type="button">强制刷新数据</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="error" id="error"></div>
+
+    <section class="grid metrics" aria-label="aum metrics">
+      <article class="metric">
+        <div class="metric-label">Latest AUM</div>
+        <div class="metric-value" id="latestAum">--</div>
+        <div class="metric-sub" id="latestTime">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Period Change</div>
+        <div class="metric-value" id="periodChange">--</div>
+        <div class="metric-sub" id="periodPct">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Period High</div>
+        <div class="metric-value" id="periodHigh">--</div>
+        <div class="metric-sub" id="periodHighTime">--</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Period Low</div>
+        <div class="metric-value" id="periodLow">--</div>
+        <div class="metric-sub" id="periodLowTime">--</div>
+      </article>
+    </section>
+
+    <section class="grid detail-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div class="panel-head-group">
+            <h2>AUM 长周期走势</h2>
+            <div class="segmented" id="rangeTabs" role="tablist" aria-label="range filter">
+              <button class="range-btn active" data-range="30" type="button">30 天</button>
+              <button class="range-btn" data-range="90" type="button">90 天</button>
+              <button class="range-btn" data-range="180" type="button">180 天</button>
+              <button class="range-btn" data-range="all" type="button">全部</button>
+            </div>
+          </div>
+          <div class="panel-note" id="rangeNote">最近 30 条</div>
+        </div>
+        <div class="chart-box tall"><canvas id="aumDetailChart"></canvas></div>
+      </article>
+
+      <div>
+        <article class="panel">
+          <div class="panel-head">
+            <h2>区间统计</h2>
+            <div class="panel-note" id="summaryNote">按当前筛选区间</div>
+          </div>
+          <div class="stat-list" id="statList"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="table-wrap" aria-label="aum history table">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>类型</th>
+            <th>AUM</th>
+            <th>日盈亏</th>
+            <th>涨跌幅</th>
+            <th>运行 ID</th>
+          </tr>
+        </thead>
+        <tbody id="historyRows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const {
+      buildAumSeries,
+      filterHistoryByDays,
+      normalizeRows,
+      sortHistory,
+    } = window.QuantbotDataUtils;
+    const API_URL = "https://quantbot-dashboard-api.weitangao.workers.dev/dashboard";
+    const charts = {};
+    const params = new URLSearchParams(window.location.search);
+    const state = {
+      view: params.get("view") === "all" ? "all" : "official",
+      range: parseRange(params.get("range")),
+      rawHistory: [],
+      history: [],
+      raw: null,
+    };
+
+    document.getElementById("refreshBtn").addEventListener("click", () => loadAum(false));
+    document.getElementById("refreshRealtimeBtn").addEventListener("click", () => loadAum(true));
+    document.querySelectorAll(".segment").forEach((button) => {
+      button.addEventListener("click", () => switchView(button.dataset.view));
+    });
+    document.querySelectorAll(".range-btn").forEach((button) => {
+      button.addEventListener("click", () => switchRange(parseRange(button.dataset.range)));
+    });
+
+    syncControls();
+    loadAum();
+
+    function syncControls() {
+      document.querySelectorAll(".segment").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === state.view);
+      });
+      document.querySelectorAll(".range-btn").forEach((button) => {
+        button.classList.toggle("active", String(button.dataset.range) === String(state.range));
+        button.textContent = button.dataset.range === "all"
+          ? "全部"
+          : `${button.dataset.range} ${state.view === "official" ? "天" : "条"}`;
+      });
+      document.getElementById("pageTitle").textContent =
+        state.view === "official" ? "正式记录 AUM" : "全部记录 AUM";
+      document.getElementById("backLink").href = `./dashboard.html?view=${encodeURIComponent(state.view)}`;
+      const next = new URLSearchParams();
+      next.set("view", state.view);
+      next.set("range", String(state.range));
+      history.replaceState({}, "", `./aum.html?${next.toString()}`);
+    }
+
+    function switchView(view) {
+      if (!view || view === state.view) return;
+      state.view = view;
+      syncControls();
+      loadAum();
+    }
+
+    function switchRange(range) {
+      if (!range || String(range) === String(state.range)) return;
+      state.range = range;
+      syncControls();
+      render();
+    }
+
+    async function loadAum(refresh = false) {
+      setStatus("正在读取更长周期的资产记录...");
+      hideError();
+      try {
+        const data = await fetchDashboard(state.view, refresh);
+        const rawHistory = sortHistory(normalizeRows(data.history || []));
+        const historyRows = buildAumSeries(rawHistory);
+        if (!historyRows.length) {
+          throw new Error("当前没有可展示的 AUM 历史数据。");
+        }
+        state.raw = data;
+        state.rawHistory = rawHistory;
+        state.history = historyRows;
+        render();
+      } catch (error) {
+        clearSurface();
+        showError(error.message || "读取失败");
+        setStatus("读取失败");
+      }
+    }
+
+    async function fetchDashboard(view, refresh) {
+      const url = `${API_URL}?view=${encodeURIComponent(view)}&limit=500${refresh ? "&refresh=1" : ""}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`接口读取失败（HTTP ${response.status}）`);
+      }
+      const data = await response.json();
+      if (!data || data.status !== "Success") {
+        throw new Error("接口返回异常，未拿到有效 AUM 数据");
+      }
+      return data;
+    }
+
+    function render() {
+      syncControls();
+      const selectedHistory = currentRangeHistory();
+      const series = selectedHistory.slice().reverse();
+      const latest = state.history[0];
+      const oldest = series[0];
+      const periodHigh = series.reduce((best, row) => number(row.total_value) > number(best.total_value) ? row : best, series[0]);
+      const periodLow = series.reduce((best, row) => number(row.total_value) < number(best.total_value) ? row : best, series[0]);
+      const latestValue = number(latest.total_value);
+      const oldestValue = number(oldest.total_value);
+      const netChange = latestValue - oldestValue;
+      const netPct = oldestValue ? (netChange / oldestValue) * 100 : 0;
+      const filteredRows = Math.max(state.rawHistory.length - state.history.length, 0);
+
+      document.getElementById("latestAum").textContent = money(latestValue);
+      document.getElementById("latestTime").textContent = `${shortTime(latest.timestamp || latest.date)} · ${latest.session || latest.record_type || "记录"}`;
+      setSignedMetric("periodChange", netChange, money);
+      setSignedMetric("periodPct", netPct, (value) => `${value.toFixed(2)}%`);
+      document.getElementById("periodHigh").textContent = money(periodHigh.total_value);
+      document.getElementById("periodHighTime").textContent = `${shortTime(periodHigh.timestamp || periodHigh.date)} · ${periodHigh.session || "--"}`;
+      document.getElementById("periodLow").textContent = money(periodLow.total_value);
+      document.getElementById("periodLowTime").textContent = `${shortTime(periodLow.timestamp || periodLow.date)} · ${periodLow.session || "--"}`;
+      document.getElementById("rangeNote").textContent = rangeDescription(selectedHistory.length, filteredRows);
+      document.getElementById("summaryNote").textContent = state.view === "official" ? "正式记录区间" : "全部记录区间";
+
+      renderAumDetailChart(series);
+      renderStatList(series);
+      renderHistoryRows(selectedHistory);
+      setStatus(
+        `${state.view === "official" ? "正式记录" : "全部记录"} · 当前展示 ${selectedHistory.length} 条${filteredRows ? ` · 过滤 ${filteredRows} 条异常快照` : ""}`
+      );
+    }
+
+    function currentRangeHistory() {
+      if (state.range === "all") return state.history.slice();
+      if (state.view === "official") {
+        return filterHistoryByDays(state.history, state.range);
+      }
+      return state.history.slice(0, Number(state.range));
+    }
+
+    function rangeDescription(recordCount, filteredRows) {
+      const filterNote = filteredRows ? ` · 已过滤 ${filteredRows} 条异常快照` : "";
+      if (state.view === "official") {
+        const period = state.range === "all" ? "全部日期" : `近 ${state.range} 天`;
+        return `${period} · ${recordCount} 条正式结算${filterNote}`;
+      }
+      const period = state.range === "all" ? "全部记录" : `最近 ${state.range} 条`;
+      return `${period} · 当前 ${recordCount} 条${filterNote}`;
+    }
+
+    function renderAumDetailChart(series) {
+      const labels = series.map((row) => shortTime(row.timestamp || row.date));
+      const aum = series.map((row) => number(row.total_value));
+      const profit = series.map((row) => number(row.daily_profit));
+
+      replaceChart("aumDetailChart", {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "AUM",
+              data: aum,
+              borderColor: "#0b5bd3",
+              backgroundColor: "rgba(11, 91, 211, 0.08)",
+              fill: true,
+              yAxisID: "y",
+              tension: 0.28,
+              pointRadius: 2.5,
+            },
+            {
+              label: "Daily P/L",
+              data: profit,
+              type: "bar",
+              backgroundColor: profit.map((value) =>
+                value >= 0 ? "rgba(15, 138, 71, 0.34)" : "rgba(197, 58, 58, 0.34)"
+              ),
+              yAxisID: "y1",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { position: "bottom" },
+          },
+          scales: {
+            y: {
+              ticks: { callback: compactMoney },
+            },
+            y1: {
+              position: "right",
+              grid: { drawOnChartArea: false },
+              ticks: { callback: compactMoney },
+            },
+          },
+        },
+      });
+    }
+
+    function renderStatList(series) {
+      const list = document.getElementById("statList");
+      const positiveDays = series.filter((row) => number(row.daily_profit) >= 0).length;
+      const negativeDays = series.length - positiveDays;
+      const averageAum = series.reduce((sum, row) => sum + number(row.total_value), 0) / Math.max(series.length, 1);
+      const totalProfit = series.reduce((sum, row) => sum + number(row.daily_profit), 0);
+
+      list.innerHTML = [
+        statRow("平均 AUM", money(averageAum), `区间内 ${series.length} 条记录`),
+        statRow("累计日盈亏", money(totalProfit), positiveClass(totalProfit)),
+        statRow("上涨次数", `${positiveDays} 次`, `下跌 ${negativeDays} 次`),
+        statRow("区间胜率", `${((positiveDays / Math.max(series.length, 1)) * 100).toFixed(1)}%`, "按日盈亏正负统计"),
+      ].join("");
+    }
+
+    function statRow(label, value, note) {
+      return `
+        <div class="stat-row">
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <div class="muted">${escapeHtml(note)}</div>
+          </div>
+          <div>${escapeHtml(String(value))}</div>
+        </div>
+      `;
+    }
+
+    function positiveClass(value) {
+      return `${value >= 0 ? "+" : ""}${money(value).replace("¥", "")}`;
+    }
+
+    function renderHistoryRows(historyRows) {
+      const rows = document.getElementById("historyRows");
+      rows.innerHTML = historyRows.map((row) => {
+        const profit = number(row.daily_profit);
+        const pct = number(row.daily_change_pct);
+        return `
+          <tr>
+            <td>${escapeHtml(shortTime(row.timestamp || row.date))}</td>
+            <td>${escapeHtml(row.session || row.record_type || "--")}</td>
+            <td>${money(row.total_value)}</td>
+            <td class="${profit >= 0 ? "positive" : "negative"}">${money(profit)}</td>
+            <td class="${pct >= 0 ? "positive" : "negative"}">${signed(pct)}%</td>
+            <td>${escapeHtml(row.run_id || "--")}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function parseRange(value) {
+      if (value === "all") return "all";
+      const numeric = Number(value);
+      return [30, 90, 180].includes(numeric) ? numeric : 30;
+    }
+
+    function replaceChart(id, config) {
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), config);
+    }
+
+    function clearSurface() {
+      ["latestAum", "latestTime", "periodChange", "periodPct", "periodHigh", "periodHighTime", "periodLow", "periodLowTime"]
+        .forEach((id) => {
+          const node = document.getElementById(id);
+          if (node) node.textContent = "--";
+        });
+      document.getElementById("statList").innerHTML = "";
+      document.getElementById("historyRows").innerHTML = "";
+      Object.keys(charts).forEach((key) => {
+        charts[key].destroy();
+        delete charts[key];
+      });
+    }
+
+    function setSignedMetric(id, value, formatter) {
+      const element = document.getElementById(id);
+      const numeric = number(value);
+      element.textContent = formatter(numeric);
+      element.classList.toggle("positive", numeric >= 0);
+      element.classList.toggle("negative", numeric < 0);
+    }
+
+    function money(value) {
+      return `¥${number(value).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+    }
+
+    function compactMoney(value) {
+      const numeric = number(value);
+      if (Math.abs(numeric) >= 10000) return `¥${(numeric / 10000).toFixed(1)}万`;
+      return `¥${numeric.toFixed(0)}`;
+    }
+
+    function number(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : 0;
+    }
+
+    function signed(value) {
+      const numeric = number(value);
+      return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}`;
+    }
+
+    function shortTime(value) {
+      if (!value) return "--";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(5, 16);
+      return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function pad(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#039;",
+      }[char]));
+    }
+
+    function setStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
+
+    function showError(message) {
+      const error = document.getElementById("error");
+      error.textContent = message;
+      error.style.display = "block";
+    }
+
+    function hideError() {
+      document.getElementById("error").style.display = "none";
+    }
+  </script>
+</body>
+</html>

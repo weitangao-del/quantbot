@@ -5,7 +5,9 @@ on:
     branches: ["main"]
     paths:
       - "dashboard.html"
+      - "aum.html"
       - "index.html"
+      - "web/**"
       - ".github/workflows/deploy-dashboard.yml"
   workflow_dispatch:
 
@@ -35,8 +37,11 @@ jobs:
       - name: Prepare site files
         run: |
           mkdir -p _site
+          mkdir -p _site/web
           cp dashboard.html _site/dashboard.html
+          cp aum.html _site/aum.html
           cp index.html _site/index.html
+          cp web/data-utils.js _site/web/data-utils.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
