@@ -1,6 +1,11 @@
 name: Portfolio Monitor
 
 on:
+  schedule:
+    - cron: "0 16 * * *" # Beijing 00:00
+    - cron: "0 22 * * *" # Beijing 06:00
+    - cron: "0 4 * * *" # Beijing 12:00
+    - cron: "0 10 * * *" # Beijing 18:00 official
   workflow_dispatch:
     inputs:
       run_slot:
