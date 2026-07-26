@@ -2,22 +2,10 @@ name: Portfolio Monitor Schedule
 
 on:
   schedule:
-    # Beijing 00:07/00:17/00:27
-    - cron: "7 16 * * *"
-    - cron: "17 16 * * *"
-    - cron: "27 16 * * *"
-    # Beijing 06:07/06:17/06:27
-    - cron: "7 22 * * *"
-    - cron: "17 22 * * *"
-    - cron: "27 22 * * *"
-    # Beijing 12:07/12:17/12:27
-    - cron: "7 4 * * *"
-    - cron: "17 4 * * *"
-    - cron: "27 4 * * *"
-    # Beijing 18:07/18:17/18:27 official
-    - cron: "7 10 * * *"
-    - cron: "17 10 * * *"
-    - cron: "27 10 * * *"
+    - cron: "17 16 * * *" # Beijing 00:17
+    - cron: "17 22 * * *" # Beijing 06:17
+    - cron: "17 4 * * *" # Beijing 12:17
+    - cron: "17 10 * * *" # Beijing 18:17 official
   workflow_dispatch:
     inputs:
       run_slot:
