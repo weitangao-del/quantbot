@@ -2,10 +2,22 @@ name: Portfolio Monitor Schedule
 
 on:
   schedule:
-    - cron: "17 16 * * *" # Beijing 00:17
-    - cron: "17 22 * * *" # Beijing 06:17
-    - cron: "17 4 * * *" # Beijing 12:17
-    - cron: "17 10 * * *" # Beijing 18:17 official
+    # Beijing 00:07/00:17/00:27
+    - cron: "7 16 * * *"
+    - cron: "17 16 * * *"
+    - cron: "27 16 * * *"
+    # Beijing 06:07/06:17/06:27
+    - cron: "7 22 * * *"
+    - cron: "17 22 * * *"
+    - cron: "27 22 * * *"
+    # Beijing 12:07/12:17/12:27
+    - cron: "7 4 * * *"
+    - cron: "17 4 * * *"
+    - cron: "27 4 * * *"
+    # Beijing 18:07/18:17/18:27 official
+    - cron: "7 10 * * *"
+    - cron: "17 10 * * *"
+    - cron: "27 10 * * *"
   workflow_dispatch:
     inputs:
       run_slot:
@@ -34,12 +46,89 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Skip duplicate scheduled snapshot
+        id: dedupe
+        env:
+          HISTORY_WEBAPP_URL: ${{ secrets.HISTORY_WEBAPP_URL }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          REPORT_TIMEZONE: Asia/Shanghai
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          schedules = {
+              "7 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
+              "17 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
+              "27 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
+              "7 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
+              "17 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
+              "27 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
+              "7 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
+              "17 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
+              "27 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
+              "7 10 * * *": ("official_1800", "晚盘正式结算", True),
+              "17 10 * * *": ("official_1800", "晚盘正式结算", True),
+              "27 10 * * *": ("official_1800", "晚盘正式结算", True),
+          }
+
+          def truthy(value):
+              return value is True or str(value).strip().lower() in {"true", "1", "yes"}
+
+          def local_date(row, timezone):
+              for key in ("timestamp", "Timestamp", "date", "Date"):
+                  value = row.get(key)
+                  if not value:
+                      continue
+                  try:
+                      parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                  except ValueError:
+                      continue
+                  if parsed.tzinfo is None:
+                      parsed = parsed.replace(tzinfo=timezone)
+                  return parsed.astimezone(timezone).strftime("%Y-%m-%d")
+              run_id = str(row.get("run_id") or row.get("Run_ID") or "")
+              if len(run_id) >= 8 and run_id[:8].isdigit():
+                  return f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}"
+              return ""
+
+          skip = False
+          cron = os.getenv("GITHUB_EVENT_SCHEDULE", "")
+          history_url = os.getenv("HISTORY_WEBAPP_URL", "")
+          timezone = ZoneInfo(os.getenv("REPORT_TIMEZONE", "Asia/Shanghai"))
+          today = datetime.now(timezone).strftime("%Y-%m-%d")
+          slot, session, official = schedules.get(cron, ("", "", False))
+
+          if os.getenv("GITHUB_EVENT_NAME") == "schedule" and history_url and slot:
+              with urllib.request.urlopen(f"{history_url}?view=all&limit=240", timeout=20) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+              for row in payload.get("history", []):
+                  if local_date(row, timezone) != today:
+                      continue
+                  if row.get("schedule_slot") == slot or str(row.get("session") or "").strip() == session:
+                      skip = True
+                      break
+                  if official and truthy(row.get("is_official_report")):
+                      skip = True
+                      break
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"skip={'true' if skip else 'false'}\n")
+          print(f"duplicate_check: cron={cron} slot={slot} session={session} skip={skip}")
+          PY
+
       - name: Install dependencies
+        if: ${{ steps.dedupe.outputs.skip != 'true' }}
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run portfolio monitor
+        if: ${{ steps.dedupe.outputs.skip != 'true' }}
         env:
           MACRO_BOT_TOKEN: ${{ secrets.MACRO_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
