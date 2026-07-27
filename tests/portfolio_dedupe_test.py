@@ -35,6 +35,10 @@ class FakeResponse:
 
 
 class ScheduledDedupeTest(unittest.TestCase):
+    def tearDown(self):
+        portfolio_monitor.GITHUB_EVENT_NAME = ""
+        portfolio_monitor.RUN_SLOT_OVERRIDE = ""
+
     def test_delayed_midnight_retry_detects_existing_snapshot_without_schedule_slot(self):
         report_time = datetime(2026, 7, 27, 1, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
 
@@ -56,3 +60,13 @@ class ScheduledDedupeTest(unittest.TestCase):
                         False,
                     )
                 )
+
+    def test_manual_workflow_dispatch_after_18_uses_official_slot(self):
+        report_time = datetime(2026, 7, 27, 20, 12, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+        portfolio_monitor.GITHUB_EVENT_NAME = "workflow_dispatch"
+        portfolio_monitor.RUN_SLOT_OVERRIDE = ""
+
+        self.assertEqual(portfolio_monitor.get_schedule_slot(report_time), "official_1800")
+        self.assertTrue(portfolio_monitor.is_official_report_run(report_time))
+        self.assertTrue(portfolio_monitor.is_automated_slot_run("official_1800"))
