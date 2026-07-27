@@ -142,6 +142,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"skip={'true' if skip else 'false'}\n")
+              output.write(f"run_slot={slot}\n")
           print(f"duplicate_check: cron={cron} slot={slot} session={session} skip={skip}")
           PY
 
@@ -162,6 +163,6 @@ jobs:
           REPORT_TIMEZONE: Asia/Shanghai
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
-          RUN_SLOT_OVERRIDE: ${{ github.event.inputs.run_slot }}
+          RUN_SLOT_OVERRIDE: ${{ steps.dedupe.outputs.run_slot || github.event.inputs.run_slot }}
           TRIGGER_SOURCE: ${{ github.event.inputs.trigger_source }}
         run: python portfolio_monitor.py
