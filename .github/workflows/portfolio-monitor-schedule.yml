@@ -100,6 +100,8 @@ jobs:
               "17 14 * * *": ("official_1800", "晚盘正式结算", True),
           }
 
+          primary_crons = {"7 16 * * *", "7 22 * * *", "7 4 * * *", "7 10 * * *"}
+
           def truthy(value):
               return value is True or str(value).strip().lower() in {"true", "1", "yes"}
 
@@ -128,17 +130,25 @@ jobs:
           slot, session, official = schedules.get(cron, ("", "", False))
 
           if os.getenv("GITHUB_EVENT_NAME") == "schedule" and history_url and slot:
-              with urllib.request.urlopen(f"{history_url}?view=all&limit=240", timeout=20) as response:
-                  payload = json.loads(response.read().decode("utf-8"))
-              for row in payload.get("history", []):
-                  if local_date(row, timezone) != today:
-                      continue
-                  if row.get("schedule_slot") == slot or str(row.get("session") or "").strip() == session:
+              try:
+                  with urllib.request.urlopen(f"{history_url}?view=all&limit=240", timeout=20) as response:
+                      payload = json.loads(response.read().decode("utf-8"))
+                  for row in payload.get("history", []):
+                      if local_date(row, timezone) != today:
+                          continue
+                      if row.get("schedule_slot") == slot or str(row.get("session") or "").strip() == session:
+                          skip = True
+                          break
+                      if official and truthy(row.get("is_official_report")):
+                          skip = True
+                          break
+              except Exception as error:
+                  if cron in primary_crons:
+                      print(f"duplicate_check_warning: {type(error).__name__}: {error}; primary cron will run")
+                      skip = False
+                  else:
+                      print(f"duplicate_check_warning: {type(error).__name__}: {error}; backup cron will skip")
                       skip = True
-                      break
-                  if official and truthy(row.get("is_official_report")):
-                      skip = True
-                      break
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"skip={'true' if skip else 'false'}\n")
