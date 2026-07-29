@@ -25,17 +25,14 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Enable pnpm
-        run: corepack enable pnpm
-
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install --no-package-lock --no-audit --no-fund
 
       - name: Run Worker regression tests
         run: node --test ../tests/worker-payload.test.mjs
 
       - name: Deploy Worker
-        run: pnpm exec wrangler deploy
+        run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
