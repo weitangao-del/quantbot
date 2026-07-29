@@ -114,12 +114,12 @@ function normalizeDashboardPayload(payload, view, limit) {
 
   let assets = [];
   if (filteredHistory.length) {
-    assets = parseEmbeddedAssets(filteredHistory[0]).sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
-  }
-  if (assets.length === 0 && Array.isArray(payload.assets) && view === "all") {
-    assets = payload.assets
-      .map(normalizeRow)
-      .sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
+    const latestRunId = filteredHistory[0].run_id;
+    assets = parseEmbeddedAssets(filteredHistory[0]);
+    if (assets.length === 0) {
+      assets = sheetAssetsForRun(payload.assets, latestRunId, payload.latest_run_id);
+    }
+    assets = assets.sort((a, b) => toNumber(b.cny_value, 0) - toNumber(a.cny_value, 0));
   }
   return {
     status: "Success",
@@ -131,6 +131,24 @@ function normalizeDashboardPayload(payload, view, limit) {
     history: filteredHistory,
     assets
   };
+}
+
+function sheetAssetsForRun(assets, runId, latestRunId) {
+  if (!Array.isArray(assets) || !assets.length || !runId) {
+    return [];
+  }
+
+  const normalizedAssets = assets.map(normalizeRow);
+  const matchingAssets = normalizedAssets.filter((asset) => String(asset.run_id || "") === String(runId));
+  if (matchingAssets.length) {
+    return matchingAssets;
+  }
+
+  if (String(latestRunId || "") === String(runId)) {
+    return normalizedAssets;
+  }
+
+  return [];
 }
 
 function parseEmbeddedAssets(row) {
@@ -205,6 +223,9 @@ function safeView(value) {
 }
 
 function isOfficialHistoryRow(row) {
+  if (!isOfficialSettlementTime(row)) {
+    return false;
+  }
   if (row.is_official_report === true) {
     return true;
   }
@@ -225,6 +246,14 @@ function isOfficialHistoryRow(row) {
   }
   const hour = historyHour(row);
   return hour === 18 || hour === 9;
+}
+
+function isOfficialSettlementTime(row) {
+  const hour = timestampHour(row);
+  if (hour === null) {
+    return true;
+  }
+  return hour === 9 || (hour >= 18 && hour <= 22);
 }
 
 function safeLimit(value) {
@@ -252,6 +281,18 @@ function jsonResponse(body, status = 200, headers = {}) {
 
 function historyHour(row) {
   const parsed = Date.parse(row.timestamp || row.date || "");
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return (new Date(parsed).getUTCHours() + 8) % 24;
+}
+
+function timestampHour(row) {
+  const rawTimestamp = row.timestamp || row.Timestamp;
+  if (!rawTimestamp) {
+    return null;
+  }
+  const parsed = Date.parse(rawTimestamp);
   if (!Number.isFinite(parsed)) {
     return null;
   }
