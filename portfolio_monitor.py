@@ -865,7 +865,7 @@ def get_portfolio_status():
     print(final_report)
     sync_ok = sync_to_cloud_history(
         total_market_value,
-        daily_profit,
+        total_daily_profit,
         total_change_pct,
         category_stats,
         asset_snapshots,
