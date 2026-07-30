@@ -2,6 +2,7 @@ import sqlite3
 import os
 import csv
 import json
+import time
 from io import StringIO
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -111,7 +112,7 @@ def get_window_by_slot(run_slot):
 
 
 def is_automated_slot_run(run_slot):
-    return bool(run_slot and (GITHUB_EVENT_NAME == "schedule" or RUN_SLOT_OVERRIDE))
+    return bool(run_slot and get_window_by_slot(run_slot) and GITHUB_EVENT_NAME in {"schedule", "workflow_dispatch"})
 
 
 def get_report_session(now, run_slot=None):
@@ -134,20 +135,18 @@ def get_due_schedule_window(now):
 def get_schedule_slot(now):
     if RUN_SLOT_OVERRIDE:
         return RUN_SLOT_OVERRIDE
-    if GITHUB_EVENT_NAME != "schedule":
-        return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
     window = get_due_schedule_window(now)
-    return window["slot"] if window else ""
+    if GITHUB_EVENT_NAME in {"schedule", "workflow_dispatch"} and window:
+        return window["slot"]
+    return f"manual_{now.strftime('%Y%m%d_%H%M%S')}"
 
 
 def is_official_report_run(now):
     if RUN_SLOT_OVERRIDE:
         window = get_window_by_slot(RUN_SLOT_OVERRIDE)
         return bool(window and window["official"])
-    if GITHUB_EVENT_NAME != "schedule":
-        return False
     window = get_due_schedule_window(now)
-    return bool(window and window["official"])
+    return bool(GITHUB_EVENT_NAME in {"schedule", "workflow_dispatch"} and window and window["official"])
 
 
 def scheduled_record_already_exists(report_time, run_slot, is_official_report):
@@ -168,10 +167,13 @@ def scheduled_record_already_exists(report_time, run_slot, is_official_report):
 
     report_date = report_time.strftime("%Y-%m-%d")
     for row in payload.get("history", []):
-        if row.get("date") != report_date:
+        if not row_matches_report_date(row, report_date):
             continue
         if row.get("schedule_slot") == run_slot:
             print(f"ℹ️ {report_date} {run_slot} 已有记录，本次备用触发跳过。")
+            return True
+        if row_session_matches_slot(row, run_slot):
+            print(f"ℹ️ {report_date} {run_slot} 已有同场次记录，本次备用触发跳过。")
             return True
         if legacy_row_matches_slot(row, run_slot):
             print(f"ℹ️ {report_date} {run_slot} 已有旧格式记录，本次备用触发跳过。")
@@ -180,6 +182,49 @@ def scheduled_record_already_exists(report_time, run_slot, is_official_report):
             print(f"ℹ️ {report_date} 已有正式记录，本次备用触发跳过。")
             return True
     return False
+
+
+def row_matches_report_date(row, report_date):
+    parsed_date = extract_row_local_date(row)
+    if parsed_date:
+        return parsed_date == report_date
+    raw_date = row.get("date") or row.get("Date")
+    return str(raw_date or "").strip()[:10] == report_date
+
+
+def extract_row_local_date(row):
+    for key in ("timestamp", "Timestamp", "date", "Date"):
+        raw_value = row.get(key)
+        if not raw_value:
+            continue
+        parsed = parse_history_datetime(raw_value)
+        if parsed:
+            return parsed.astimezone(ZoneInfo(REPORT_TIMEZONE)).strftime("%Y-%m-%d")
+
+    run_id = str(row.get("run_id") or row.get("Run_ID") or "")
+    if len(run_id) >= 8 and run_id[:8].isdigit():
+        return f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}"
+    return None
+
+
+def parse_history_datetime(value):
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo(REPORT_TIMEZONE))
+    return parsed
+
+
+def row_session_matches_slot(row, run_slot):
+    window = get_window_by_slot(run_slot)
+    if not window:
+        return False
+    return str(row.get("session") or row.get("Session") or "").strip() == window["session"]
 
 
 def legacy_row_matches_slot(row, run_slot):
@@ -211,11 +256,9 @@ def get_schedule_cron(run_slot):
 def extract_row_hour(row):
     timestamp = row.get("timestamp") or row.get("Timestamp")
     if timestamp:
-        try:
-            parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        parsed = parse_history_datetime(timestamp)
+        if parsed:
             return parsed.astimezone(ZoneInfo(REPORT_TIMEZONE)).hour
-        except ValueError:
-            pass
 
     run_id = str(row.get("run_id") or row.get("Run_ID") or "")
     if "-" in run_id:
@@ -352,6 +395,37 @@ def build_bucket_snapshot(category_stats, total_market_value):
     return bucket_snapshot
 
 
+def cloud_history_has_payload(webhook_url, payload, attempts=3, wait_seconds=5):
+    run_id = payload["run_id"]
+    report_date = payload["date"]
+    run_slot = payload["schedule_slot"]
+    is_official_report = payload["is_official_report"]
+
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            time.sleep(wait_seconds)
+        try:
+            response = requests.get(f"{webhook_url}?view=all&limit=240", timeout=30)
+            response.raise_for_status()
+            history_payload = response.json()
+        except Exception as e:
+            print(f"⚠️ 第 {attempt} 次写入确认查询失败: {e}")
+            continue
+
+        for row in history_payload.get("history", []):
+            if str(row.get("run_id") or row.get("Run_ID") or "") == run_id:
+                return True
+            if not row_matches_report_date(row, report_date):
+                continue
+            if row.get("schedule_slot") == run_slot:
+                return True
+            if row_session_matches_slot(row, run_slot):
+                return True
+            if is_official_report and is_truthy(row.get("is_official_report")):
+                return True
+    return False
+
+
 def sync_to_cloud_history(
     total_value,
     daily_profit,
@@ -404,7 +478,7 @@ def sync_to_cloud_history(
     payload["striking_alerts_json"] = json.dumps(striking_alerts, ensure_ascii=False)
 
     try:
-        response = requests.post(webhook_url, json=payload, timeout=15)
+        response = requests.post(webhook_url, json=payload, timeout=45)
         response_preview = response.text[:500]
         print(f"📨 Google Sheets Web App 返回: HTTP {response.status_code} | {response_preview}")
         if "Success" in response.text:
@@ -412,9 +486,14 @@ def sync_to_cloud_history(
             return True
         else:
             print(f"⚠️ 云端历史同步返回异常: {response.text[:200]}")
-            return False
     except Exception as e:
-        print(f"❌ 云端历史同步失败: {e}")
+        print(f"⚠️ 云端历史同步请求未确认完成: {e}")
+
+    if cloud_history_has_payload(webhook_url, payload):
+        print("📈 写入请求未及时返回，但已在 Google Sheets History 中确认到本次记录。")
+        return True
+    else:
+        print("❌ 云端历史同步失败: 未能在 Google Sheets History 中确认本次记录。")
         return False
 
 
@@ -786,7 +865,7 @@ def get_portfolio_status():
     print(final_report)
     sync_ok = sync_to_cloud_history(
         total_market_value,
-        total_daily_profit,
+        daily_profit,
         total_change_pct,
         category_stats,
         asset_snapshots,
