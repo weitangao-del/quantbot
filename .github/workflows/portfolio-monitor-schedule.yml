@@ -2,34 +2,10 @@ name: Portfolio Monitor Schedule
 
 on:
   schedule:
-    # Beijing 00:07/00:17/00:27
-    - cron: "7 16 * * *"
-    - cron: "17 16 * * *"
-    - cron: "27 16 * * *"
-    - cron: "17 17 * * *"
-    - cron: "17 18 * * *"
-    # Beijing 06:07/06:17/06:27
-    - cron: "7 22 * * *"
-    - cron: "17 22 * * *"
-    - cron: "27 22 * * *"
-    - cron: "17 23 * * *"
-    - cron: "17 0 * * *"
-    # Beijing 12:07/12:17/12:27
-    - cron: "7 4 * * *"
-    - cron: "17 4 * * *"
-    - cron: "27 4 * * *"
-    - cron: "17 5 * * *"
-    - cron: "17 6 * * *"
-    - cron: "17 7 * * *"
-    - cron: "17 8 * * *"
-    # Beijing 18:07/18:17/18:27 official
-    - cron: "7 10 * * *"
-    - cron: "17 10 * * *"
-    - cron: "27 10 * * *"
-    - cron: "17 11 * * *"
-    - cron: "17 12 * * *"
-    - cron: "17 13 * * *"
-    - cron: "17 14 * * *"
+    # GitHub scheduled workflows can be delayed or occasionally dropped when many
+    # discrete cron entries are used. Wake frequently, then gate by Beijing time
+    # and existing sheet records inside the workflow.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       run_slot:
@@ -64,6 +40,7 @@ jobs:
           HISTORY_WEBAPP_URL: ${{ secrets.HISTORY_WEBAPP_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_RUN_SLOT: ${{ github.event.inputs.run_slot }}
           REPORT_TIMEZONE: Asia/Shanghai
         run: |
           python - <<'PY'
@@ -73,43 +50,21 @@ jobs:
           from datetime import datetime
           from zoneinfo import ZoneInfo
 
-          schedules = {
-              "7 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
-              "17 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
-              "27 16 * * *": ("ad_hoc_0000", "午夜资产快照", False),
-              "17 17 * * *": ("ad_hoc_0000", "午夜资产快照", False),
-              "17 18 * * *": ("ad_hoc_0000", "午夜资产快照", False),
-              "7 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
-              "17 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
-              "27 22 * * *": ("ad_hoc_0600", "早盘资产快照", False),
-              "17 23 * * *": ("ad_hoc_0600", "早盘资产快照", False),
-              "17 0 * * *": ("ad_hoc_0600", "早盘资产快照", False),
-              "7 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "17 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "27 4 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "17 5 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "17 6 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "17 7 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "17 8 * * *": ("ad_hoc_1200", "午间资产快照", False),
-              "7 10 * * *": ("official_1800", "晚盘正式结算", True),
-              "17 10 * * *": ("official_1800", "晚盘正式结算", True),
-              "27 10 * * *": ("official_1800", "晚盘正式结算", True),
-              "17 11 * * *": ("official_1800", "晚盘正式结算", True),
-              "17 12 * * *": ("official_1800", "晚盘正式结算", True),
-              "17 13 * * *": ("official_1800", "晚盘正式结算", True),
-              "17 14 * * *": ("official_1800", "晚盘正式结算", True),
+          slot_specs = {
+              "ad_hoc_0000": ("午夜资产快照", False, {0, 1, 2}),
+              "ad_hoc_0600": ("早盘资产快照", False, {6, 7, 8}),
+              "ad_hoc_1200": ("午间资产快照", False, {12, 13, 14, 15, 16}),
+              "official_1800": ("晚盘正式结算", True, {18, 19, 20, 21, 22}),
           }
-
-          allowed_hours_by_slot = {
-              "ad_hoc_0000": {0, 1, 2},
-              "ad_hoc_0600": {6, 7, 8},
-              "ad_hoc_1200": {12, 13, 14, 15, 16},
-              "official_1800": {18, 19, 20, 21, 22},
-          }
-          primary_crons = {"7 16 * * *", "7 22 * * *", "7 4 * * *", "7 10 * * *"}
 
           def truthy(value):
               return value is True or str(value).strip().lower() in {"true", "1", "yes"}
+
+          def slot_for_hour(hour):
+              for slot_name, (_, _, allowed_hours) in slot_specs.items():
+                  if hour in allowed_hours:
+                      return slot_name
+              return ""
 
           def local_date(row, timezone):
               for key in ("timestamp", "Timestamp", "date", "Date"):
@@ -143,7 +98,7 @@ jobs:
               return None
 
           def row_matches_slot(row, slot, timezone):
-              allowed_hours = allowed_hours_by_slot.get(slot)
+              allowed_hours = slot_specs.get(slot, ("", False, set()))[2]
               if not allowed_hours:
                   return True
               row_hour_value = row_hour(row, timezone)
@@ -151,23 +106,28 @@ jobs:
                   return True
               return row_hour_value in allowed_hours
 
-          skip = False
+          event_name = os.getenv("GITHUB_EVENT_NAME", "")
           cron = os.getenv("GITHUB_EVENT_SCHEDULE", "")
+          manual_slot = os.getenv("MANUAL_RUN_SLOT", "").strip()
           history_url = os.getenv("HISTORY_WEBAPP_URL", "")
           timezone = ZoneInfo(os.getenv("REPORT_TIMEZONE", "Asia/Shanghai"))
           now_local = datetime.now(timezone)
           today = now_local.strftime("%Y-%m-%d")
-          slot, session, official = schedules.get(cron, ("", "", False))
-          allowed_hours = allowed_hours_by_slot.get(slot)
 
-          if os.getenv("GITHUB_EVENT_NAME") == "schedule" and allowed_hours and now_local.hour not in allowed_hours:
+          skip = False
+          if event_name == "schedule":
+              slot = slot_for_hour(now_local.hour)
+          elif manual_slot in slot_specs:
+              slot = manual_slot
+          else:
+              slot = slot_for_hour(now_local.hour)
+
+          session, official, allowed_hours = slot_specs.get(slot, ("", False, set()))
+
+          if event_name == "schedule" and not slot:
               skip = True
-              print(
-                  "stale_schedule_skip: "
-                  f"cron={cron} slot={slot} local_time={now_local.isoformat()} "
-                  f"allowed_hours={sorted(allowed_hours)}"
-              )
-          elif os.getenv("GITHUB_EVENT_NAME") == "schedule" and history_url and slot:
+              print(f"idle_schedule_skip: cron={cron} local_time={now_local.isoformat()}")
+          elif event_name == "schedule" and history_url and slot:
               try:
                   with urllib.request.urlopen(f"{history_url}?view=all&limit=240", timeout=20) as response:
                       payload = json.loads(response.read().decode("utf-8"))
@@ -184,17 +144,17 @@ jobs:
                           skip = True
                           break
               except Exception as error:
-                  if cron in primary_crons:
-                      print(f"duplicate_check_warning: {type(error).__name__}: {error}; primary cron will run")
-                      skip = False
-                  else:
-                      print(f"duplicate_check_warning: {type(error).__name__}: {error}; backup cron will skip")
-                      skip = True
+                  print(f"duplicate_check_warning: {type(error).__name__}: {error}; scheduled slot will run")
+                  skip = False
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"skip={'true' if skip else 'false'}\n")
               output.write(f"run_slot={slot}\n")
-          print(f"duplicate_check: cron={cron} slot={slot} session={session} skip={skip}")
+          print(
+              "schedule_gate: "
+              f"event={event_name} cron={cron} slot={slot} session={session} "
+              f"local_time={now_local.isoformat()} skip={skip}"
+          )
           PY
 
       - name: Install dependencies
@@ -214,6 +174,6 @@ jobs:
           REPORT_TIMEZONE: Asia/Shanghai
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
-          RUN_SLOT_OVERRIDE: ${{ steps.dedupe.outputs.run_slot || github.event.inputs.run_slot }}
+          RUN_SLOT_OVERRIDE: ${{ steps.dedupe.outputs.run_slot }}
           TRIGGER_SOURCE: ${{ github.event.inputs.trigger_source }}
         run: python portfolio_monitor.py
