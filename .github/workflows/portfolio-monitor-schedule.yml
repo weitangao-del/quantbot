@@ -1,35 +1,8 @@
 name: Portfolio Monitor Schedule
 
 on:
-  schedule:
-    # Beijing 00:07/00:17/00:27 with later backups
-    - cron: "7 16 * * *"
-    - cron: "17 16 * * *"
-    - cron: "27 16 * * *"
-    - cron: "17 17 * * *"
-    - cron: "17 18 * * *"
-    # Beijing 06:07/06:17/06:27 with later backups
-    - cron: "7 22 * * *"
-    - cron: "17 22 * * *"
-    - cron: "27 22 * * *"
-    - cron: "17 23 * * *"
-    - cron: "17 0 * * *"
-    # Beijing 12:07/12:17/12:27 with later backups
-    - cron: "7 4 * * *"
-    - cron: "17 4 * * *"
-    - cron: "27 4 * * *"
-    - cron: "17 5 * * *"
-    - cron: "17 6 * * *"
-    - cron: "17 7 * * *"
-    - cron: "17 8 * * *"
-    # Beijing 18:07/18:17/18:27 official with later backups
-    - cron: "7 10 * * *"
-    - cron: "17 10 * * *"
-    - cron: "27 10 * * *"
-    - cron: "17 11 * * *"
-    - cron: "17 12 * * *"
-    - cron: "17 13 * * *"
-    - cron: "17 14 * * *"
+  # Legacy manual fallback only. Production scheduling is owned by
+  # Cloudflare Worker crons in cloudflare-worker/wrangler.toml.
   workflow_dispatch:
     inputs:
       run_slot:
