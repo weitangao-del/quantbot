@@ -66,4 +66,4 @@ jobs:
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
           RUN_SLOT_OVERRIDE: ${{ steps.slot.outputs.run_slot }}
           TRIGGER_SOURCE: ${{ github.event.inputs.trigger_source }}
-        run: python portfolio_monitor.py
+        run: python portfolio_monitor_guarded.py
