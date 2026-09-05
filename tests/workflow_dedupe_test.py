@@ -7,14 +7,20 @@ WORKFLOW_PATH = Path(".github/workflows/portfolio-monitor-schedule.yml")
 
 
 class WorkflowDedupeTest(unittest.TestCase):
-    def test_main_workflow_has_no_github_schedule_and_guards_stale_dispatch(self):
+    def test_main_workflow_has_github_schedule_fallback_and_guards_stale_runs(self):
         workflow = MAIN_WORKFLOW_PATH.read_text(encoding="utf-8")
 
         self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("  schedule:", workflow)
-        self.assertNotIn("github.event.schedule", workflow)
+        self.assertIn("  schedule:", workflow)
+        self.assertIn('cron: "0 16 * * *"', workflow)
+        self.assertIn('cron: "0 22 * * *"', workflow)
+        self.assertIn('cron: "0 4 * * *"', workflow)
+        self.assertIn('cron: "0 10 * * *"', workflow)
+        self.assertIn("GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}", workflow)
         self.assertIn("Guard stale dispatch slot", workflow)
+        self.assertIn("schedules = {", workflow)
         self.assertIn("stale_dispatch_skip", workflow)
+        self.assertIn("stale_schedule_skip", workflow)
         self.assertIn("official_1800", workflow)
         self.assertIn("18, 19, 20, 21, 22", workflow)
 
