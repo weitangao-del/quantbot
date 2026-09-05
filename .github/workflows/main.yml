@@ -1,6 +1,11 @@
 name: Portfolio Monitor
 
 on:
+  schedule:
+    - cron: "0 16 * * *"
+    - cron: "0 22 * * *"
+    - cron: "0 4 * * *"
+    - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
       run_slot:
@@ -34,6 +39,8 @@ jobs:
         shell: bash
         env:
           REPORT_TIMEZONE: Asia/Shanghai
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
           RUN_SLOT_OVERRIDE: ${{ github.event.inputs.run_slot }}
         run: |
           python - <<'PY'
@@ -47,16 +54,27 @@ jobs:
               "ad_hoc_1200": {12, 13, 14, 15, 16},
               "official_1800": {18, 19, 20, 21, 22},
           }
+          schedules = {
+              "0 16 * * *": "ad_hoc_0000",
+              "0 22 * * *": "ad_hoc_0600",
+              "0 4 * * *": "ad_hoc_1200",
+              "0 10 * * *": "official_1800",
+          }
 
+          event_name = os.getenv("GITHUB_EVENT_NAME", "").strip()
+          event_schedule = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
           slot = os.getenv("RUN_SLOT_OVERRIDE", "").strip()
+          if not slot and event_name == "schedule":
+              slot = schedules.get(event_schedule, "")
           timezone = ZoneInfo(os.getenv("REPORT_TIMEZONE", "Asia/Shanghai"))
           now = datetime.now(timezone)
           allowed_hours = allowed_hours_by_slot.get(slot)
           skip = bool(allowed_hours and now.hour not in allowed_hours)
 
           if skip:
+              reason = "stale_schedule_skip" if event_name == "schedule" else "stale_dispatch_skip"
               print(
-                  "stale_dispatch_skip: "
+                  f"{reason}: "
                   f"slot={slot} local_time={now.isoformat()} "
                   f"allowed_hours={sorted(allowed_hours)}"
               )
@@ -65,6 +83,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"skip={'true' if skip else 'false'}\n")
+              output.write(f"run_slot={slot}\n")
           PY
 
       - name: Install dependencies
@@ -83,6 +102,7 @@ jobs:
           HISTORY_WEBAPP_URL: ${{ secrets.HISTORY_WEBAPP_URL }}
           REPORT_TIMEZONE: Asia/Shanghai
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          RUN_SLOT_OVERRIDE: ${{ github.event.inputs.run_slot }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          RUN_SLOT_OVERRIDE: ${{ steps.slot_guard.outputs.run_slot || github.event.inputs.run_slot }}
           TRIGGER_SOURCE: ${{ github.event.inputs.trigger_source }}
         run: python portfolio_monitor_guarded.py
