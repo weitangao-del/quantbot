@@ -3,9 +3,21 @@ name: Portfolio Monitor
 on:
   schedule:
     - cron: "0 16 * * *"
+    - cron: "20 16 * * *"
+    - cron: "40 16 * * *"
+    - cron: "20 17 * * *"
     - cron: "0 22 * * *"
+    - cron: "20 22 * * *"
+    - cron: "40 22 * * *"
+    - cron: "20 23 * * *"
     - cron: "0 4 * * *"
+    - cron: "20 4 * * *"
+    - cron: "40 4 * * *"
+    - cron: "20 5 * * *"
     - cron: "0 10 * * *"
+    - cron: "20 10 * * *"
+    - cron: "40 10 * * *"
+    - cron: "20 11 * * *"
   workflow_dispatch:
     inputs:
       run_slot:
@@ -56,9 +68,21 @@ jobs:
           }
           schedules = {
               "0 16 * * *": "ad_hoc_0000",
+              "20 16 * * *": "ad_hoc_0000",
+              "40 16 * * *": "ad_hoc_0000",
+              "20 17 * * *": "ad_hoc_0000",
               "0 22 * * *": "ad_hoc_0600",
+              "20 22 * * *": "ad_hoc_0600",
+              "40 22 * * *": "ad_hoc_0600",
+              "20 23 * * *": "ad_hoc_0600",
               "0 4 * * *": "ad_hoc_1200",
+              "20 4 * * *": "ad_hoc_1200",
+              "40 4 * * *": "ad_hoc_1200",
+              "20 5 * * *": "ad_hoc_1200",
               "0 10 * * *": "official_1800",
+              "20 10 * * *": "official_1800",
+              "40 10 * * *": "official_1800",
+              "20 11 * * *": "official_1800",
           }
 
           event_name = os.getenv("GITHUB_EVENT_NAME", "").strip()
