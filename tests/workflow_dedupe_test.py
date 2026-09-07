@@ -44,6 +44,15 @@ class WorkflowDedupeTest(unittest.TestCase):
         self.assertIn("official_1800", workflow)
         self.assertIn("18, 19, 20, 21, 22", workflow)
 
+    def test_main_workflow_routes_delayed_schedule_by_current_local_window(self):
+        workflow = MAIN_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("def slot_for_local_hour", workflow)
+        self.assertIn('if event_name == "schedule":', workflow)
+        self.assertIn("slot = slot_for_local_hour(now.hour) or schedules.get(event_schedule, \"\")", workflow)
+        self.assertIn("delayed_schedule_rebucket", workflow)
+        self.assertNotIn('reason = "stale_schedule_skip" if event_name == "schedule"', workflow)
+
     def test_official_dedupe_validates_existing_row_time_window(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
