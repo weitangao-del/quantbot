@@ -104,15 +104,37 @@ jobs:
           event_name = os.getenv("GITHUB_EVENT_NAME", "").strip()
           event_schedule = os.getenv("GITHUB_EVENT_SCHEDULE", "").strip()
           slot = os.getenv("RUN_SLOT_OVERRIDE", "").strip()
-          if not slot and event_name == "schedule":
-              slot = schedules.get(event_schedule, "")
           timezone = ZoneInfo(os.getenv("REPORT_TIMEZONE", "Asia/Shanghai"))
           now = datetime.now(timezone)
+
+          def slot_for_local_hour(hour):
+              if hour in allowed_hours_by_slot["ad_hoc_0000"]:
+                  return "ad_hoc_0000"
+              if hour in allowed_hours_by_slot["ad_hoc_0600"]:
+                  return "ad_hoc_0600"
+              if hour in allowed_hours_by_slot["ad_hoc_1200"]:
+                  return "ad_hoc_1200"
+              if hour in allowed_hours_by_slot["official_1800"]:
+                  return "official_1800"
+              return ""
+
+          if event_name == "schedule":
+              if not slot:
+                  scheduled_slot = schedules.get(event_schedule, "")
+                  slot = slot_for_local_hour(now.hour) or schedules.get(event_schedule, "")
+                  if scheduled_slot and slot and scheduled_slot != slot:
+                      print(
+                          "delayed_schedule_rebucket: "
+                          f"cron={event_schedule} scheduled_slot={scheduled_slot} "
+                          f"effective_slot={slot} local_time={now.isoformat()}"
+                      )
           allowed_hours = allowed_hours_by_slot.get(slot)
           skip = bool(allowed_hours and now.hour not in allowed_hours)
 
           if skip:
-              reason = "stale_schedule_skip" if event_name == "schedule" else "stale_dispatch_skip"
+              reason = "stale_dispatch_skip"
+              if event_name == "schedule":
+                  reason = "stale_schedule_skip"
               print(
                   f"{reason}: "
                   f"slot={slot} local_time={now.isoformat()} "
