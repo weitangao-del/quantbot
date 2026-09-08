@@ -15,7 +15,55 @@ MIN_REFERENCE_AUM = 50000
 MIN_ASSET_COUNT = 8
 MAX_DROP_RATIO = 0.60
 
+PRIMARY_CRONS_BY_SLOT = {window["slot"]: window["cron"] for window in monitor.SCHEDULE_WINDOWS}
+
+_original_scheduled_record_already_exists = monitor.scheduled_record_already_exists
 _original_sync_to_cloud_history = monitor.sync_to_cloud_history
+
+
+def is_backup_github_schedule(run_slot):
+    event_name = os.getenv("GITHUB_EVENT_NAME", monitor.GITHUB_EVENT_NAME).strip()
+    event_schedule = os.getenv("GITHUB_EVENT_SCHEDULE", monitor.GITHUB_EVENT_SCHEDULE).strip()
+    primary_cron = PRIMARY_CRONS_BY_SLOT.get(run_slot, "")
+    return bool(event_name == "schedule" and event_schedule and primary_cron and event_schedule != primary_cron)
+
+
+def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_report):
+    if not monitor.is_automated_slot_run(run_slot):
+        return False
+
+    webhook_url = os.getenv("HISTORY_WEBAPP_URL")
+    if not webhook_url:
+        return False
+
+    try:
+        response = requests.get(f"{webhook_url}?view=all&limit=240", timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        if is_backup_github_schedule(run_slot):
+            print(f"ℹ️ 无法检查定时记录去重状态，GitHub 备用触发将跳过以避免重复写入: {exc}")
+            return True
+        print(f"⚠️ 无法检查定时记录去重状态，主触发将继续执行本次运行: {exc}")
+        return False
+
+    report_date = report_time.strftime("%Y-%m-%d")
+    for row in payload.get("history", []):
+        if not monitor.row_matches_report_date(row, report_date):
+            continue
+        if row.get("schedule_slot") == run_slot:
+            print(f"ℹ️ {report_date} {run_slot} 已有记录，本次备用触发跳过。")
+            return True
+        if monitor.row_session_matches_slot(row, run_slot):
+            print(f"ℹ️ {report_date} {run_slot} 已有同场次记录，本次备用触发跳过。")
+            return True
+        if monitor.legacy_row_matches_slot(row, run_slot):
+            print(f"ℹ️ {report_date} {run_slot} 已有旧格式记录，本次备用触发跳过。")
+            return True
+        if is_official_report and monitor.is_truthy(row.get("is_official_report")):
+            print(f"ℹ️ {report_date} 已有正式记录，本次备用触发跳过。")
+            return True
+    return False
 
 
 def snapshot_quality_issue(total_value, asset_count, previous_total_value):
@@ -91,6 +139,7 @@ def guarded_sync_to_cloud_history(
     )
 
 
+monitor.scheduled_record_already_exists = guarded_scheduled_record_already_exists
 monitor.sync_to_cloud_history = guarded_sync_to_cloud_history
 
 
