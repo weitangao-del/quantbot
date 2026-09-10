@@ -14,6 +14,10 @@ import portfolio_monitor as monitor
 MIN_REFERENCE_AUM = 50000
 MIN_ASSET_COUNT = 8
 MAX_DROP_RATIO = 0.60
+DASHBOARD_API_URL = os.getenv(
+    "DASHBOARD_API_URL",
+    "https://quantbot-dashboard-api.weitangao.workers.dev/dashboard",
+).strip()
 
 PRIMARY_CRONS_BY_SLOT = {window["slot"]: window["cron"] for window in monitor.SCHEDULE_WINDOWS}
 
@@ -28,27 +32,21 @@ def is_backup_github_schedule(run_slot):
     return bool(event_name == "schedule" and event_schedule and primary_cron and event_schedule != primary_cron)
 
 
-def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_report):
-    if not monitor.is_automated_slot_run(run_slot):
-        return False
+def history_rows_from_payload(payload):
+    if not isinstance(payload, dict):
+        return []
 
-    webhook_url = os.getenv("HISTORY_WEBAPP_URL")
-    if not webhook_url:
-        return False
+    rows = payload.get("history") or payload.get("records") or []
+    if isinstance(rows, dict):
+        rows = rows.get("history") or rows.get("records") or []
+    return rows if isinstance(rows, list) else []
 
-    try:
-        response = requests.get(f"{webhook_url}?view=all&limit=240", timeout=15)
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as exc:
-        if is_backup_github_schedule(run_slot):
-            print(f"ℹ️ 无法检查定时记录去重状态，GitHub 备用触发将跳过以避免重复写入: {exc}")
-            return True
-        print(f"⚠️ 无法检查定时记录去重状态，主触发将继续执行本次运行: {exc}")
-        return False
 
+def payload_has_slot_record(payload, report_time, run_slot, is_official_report):
     report_date = report_time.strftime("%Y-%m-%d")
-    for row in payload.get("history", []):
+    for row in history_rows_from_payload(payload):
+        if not isinstance(row, dict):
+            continue
         if not monitor.row_matches_report_date(row, report_date):
             continue
         if row.get("schedule_slot") == run_slot:
@@ -64,6 +62,49 @@ def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_r
             print(f"ℹ️ {report_date} 已有正式记录，本次备用触发跳过。")
             return True
     return False
+
+
+def worker_history_payload():
+    if not DASHBOARD_API_URL:
+        return None
+
+    response = requests.get(f"{DASHBOARD_API_URL}?view=all&limit=240&cb={monitor.local_now().timestamp()}", timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
+def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_report):
+    if not monitor.is_automated_slot_run(run_slot):
+        return False
+
+    webhook_url = os.getenv("HISTORY_WEBAPP_URL")
+    if not webhook_url:
+        return False
+
+    try:
+        response = requests.get(f"{webhook_url}?view=all&limit=240", timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"⚠️ Apps Script 去重查询失败，尝试使用 Worker API 复核: {exc}")
+        try:
+            payload = worker_history_payload()
+        except Exception as worker_exc:
+            if is_backup_github_schedule(run_slot):
+                print(
+                    "ℹ️ Apps Script 与 Worker 均无法确认去重状态，"
+                    f"GitHub 备用触发将跳过以避免重复写入: {worker_exc}"
+                )
+                return True
+            print(f"⚠️ 去重状态无法确认，主触发将继续执行本次运行: {worker_exc}")
+            return False
+
+        if payload_has_slot_record(payload, report_time, run_slot, is_official_report):
+            return True
+        print("⚠️ Worker API 未发现同场次记录，本次运行将继续补写。")
+        return False
+
+    return payload_has_slot_record(payload, report_time, run_slot, is_official_report)
 
 
 def snapshot_quality_issue(total_value, asset_count, previous_total_value):
