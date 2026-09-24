@@ -90,10 +90,10 @@ def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_r
         try:
             payload = worker_history_payload()
         except Exception as worker_exc:
-            if is_backup_github_schedule(run_slot):
+            if os.getenv("GITHUB_EVENT_NAME", monitor.GITHUB_EVENT_NAME).strip() == "schedule":
                 print(
                     "ℹ️ Apps Script 与 Worker 均无法确认去重状态，"
-                    f"GitHub 备用触发将跳过以避免重复写入: {worker_exc}"
+                    f"GitHub 定时触发将跳过以避免重复写入: {worker_exc}"
                 )
                 return True
             print(f"⚠️ 去重状态无法确认，主触发将继续执行本次运行: {worker_exc}")
