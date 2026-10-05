@@ -101,7 +101,10 @@ def guarded_scheduled_record_already_exists(report_time, run_slot, is_official_r
 
         if payload_has_slot_record(payload, report_time, run_slot, is_official_report):
             return True
-        print("⚠️ Worker API 未发现同场次记录，本次运行将继续补写。")
+        if is_backup_github_schedule(run_slot):
+            print("ℹ️ 备用定时触发无法从主数据源确认去重状态，为避免重复写入将跳过。")
+            return True
+        print("⚠️ Worker API 未发现同场次记录，主定时触发将继续补写。")
         return False
 
     return payload_has_slot_record(payload, report_time, run_slot, is_official_report)
