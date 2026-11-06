@@ -107,3 +107,28 @@ test("official dashboard excludes stale official rows outside the evening settle
   assert.equal(data.latest_run_id, "20260728-200523");
   assert.equal(data.history.some((row) => row.run_id === "20260729-001708"), false);
 });
+test("scheduled dispatch retries transient GitHub API failures", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  let scheduledPromise;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return calls < 3 ? new Response("temporary failure", { status: 503 }) : new Response(null, { status: 204 });
+  };
+
+  try {
+    worker.scheduled(
+      { cron: "0 10 * * *" },
+      {
+        GITHUB_WORKFLOW_TOKEN: "test-token",
+        GITHUB_OWNER: "weitangao-del",
+        GITHUB_REPO: "quantbot",
+      },
+      { waitUntil: (promise) => { scheduledPromise = promise; } },
+    );
+    await scheduledPromise;
+    assert.equal(calls, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

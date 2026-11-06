@@ -111,7 +111,8 @@ jobs:
               if not slot:
                   slot = schedules.get(event_schedule, "")
           allowed_hours = allowed_hours_by_slot.get(slot)
-          skip = bool(allowed_hours and now.hour not in allowed_hours)
+          stale = bool(allowed_hours and now.hour not in allowed_hours)
+          skip = stale
 
           if skip:
               reason = "stale_dispatch_skip"
@@ -128,6 +129,8 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"skip={'true' if skip else 'false'}\n")
               output.write(f"run_slot={slot}\n")
+          if stale:
+              raise SystemExit("stale schedule skipped; reporting failure so a missed slot is visible")
           PY
 
       - name: Install dependencies

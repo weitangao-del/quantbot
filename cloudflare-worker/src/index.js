@@ -310,30 +310,48 @@ async function triggerMonitorRun(run, cron, env) {
     throw new Error("Missing GitHub workflow dispatch configuration in Cloudflare Worker");
   }
 
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        "accept": "application/vnd.github+json",
-        "authorization": `Bearer ${token}`,
-        "content-type": "application/json",
-        "user-agent": "quantbot-dashboard-api"
-      },
-      body: JSON.stringify({
-        ref,
-        inputs: {
-          run_slot: run.slot,
-          trigger_source: `cloudflare:${run.label}:${cron}`
-        }
-      })
+  const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`;
+  const request = {
+    method: "POST",
+    headers: {
+      "accept": "application/vnd.github+json",
+      "authorization": `Bearer ${token}`,
+      "content-type": "application/json",
+      "user-agent": "quantbot-dashboard-api"
+    },
+    body: JSON.stringify({
+      ref,
+      inputs: {
+        run_slot: run.slot,
+        trigger_source: `cloudflare:${run.label}:${cron}`
+      }
+    })
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(url, request);
+    } catch (error) {
+      if (attempt === 3) {
+        throw new Error(`GitHub dispatch request failed after ${attempt} attempts: ${error.message}`);
+      }
+      console.warn(`GitHub dispatch network error on attempt ${attempt}; retrying`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+      continue;
     }
-  );
 
-  if (!response.ok) {
+    if (response.ok) {
+      console.log(`Triggered ${repo} workflow for ${run.slot} via ${cron}`);
+      return;
+    }
+
     const errorText = await response.text();
-    throw new Error(`GitHub dispatch failed (${response.status}): ${errorText}`);
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === 3) {
+      throw new Error(`GitHub dispatch failed (${response.status}): ${errorText}`);
+    }
+    console.warn(`GitHub dispatch returned ${response.status} on attempt ${attempt}; retrying`);
+    await new Promise((resolve) => setTimeout(resolve, attempt * 250));
   }
-
-  console.log(`Triggered ${repo} workflow for ${run.slot} via ${cron}`);
 }
